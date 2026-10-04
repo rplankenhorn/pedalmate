@@ -19,11 +19,13 @@ private class FakeSource : PollableBikeDataSource {
     var pollCount = 0
     var started = 0
     var stopped = 0
+    var onPoll: (() -> Unit)? = null
 
     override fun start() { started++ }
     override fun stop() { stopped++ }
     override fun pollBikeData(): BikeMetrics? {
         pollCount++
+        onPoll?.invoke()
         val r = pollResult
         if (r != null) { framesReceived++; metrics.value = r }
         return r
@@ -107,6 +109,29 @@ class BikeSourceSupervisorTest {
         source.pollResult = M
         harness.advanceBy(2_000)                // t = 5250: 5 s since last push, first poll succeeds
         assertEquals(ConnectionState.Connected, state)
+    }
+
+    @Test fun `stop during a poll does not apply the late result`() {
+        supervisor.start()
+        source.pollResult = M
+        source.onPoll = { supervisor.stop() }   // the binder call is in flight when stop() arrives
+        harness.advanceBy(5_000)                // first poll at t = 5000
+        assertEquals(1, source.pollCount)
+        assertEquals(ConnectionState.Unavailable, state)
+    }
+
+    @Test fun `stop is not blocked by a hung poll`() {
+        supervisor.start()
+        val inPoll = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        source.onPoll = { inPoll.countDown(); release.await(10, java.util.concurrent.TimeUnit.SECONDS) }
+        val ticker = Thread { harness.advanceBy(5_000) }.also { it.start() }
+        assertTrue(inPoll.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        val stopped = java.util.concurrent.CountDownLatch(1)
+        Thread { supervisor.stop(); stopped.countDown() }.start()
+        val returned = stopped.await(2, java.util.concurrent.TimeUnit.SECONDS)
+        release.countDown(); ticker.join(5_000)
+        assertTrue("stop() must not wait for the blocking poll", returned)
     }
 
     @Test fun `a failing poll leaves Disconnected`() {

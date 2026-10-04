@@ -31,6 +31,8 @@ class BikeSourceSupervisor(
     private var lastLogAt = 0L
     private var everFrame = false
     private var polling = false
+    private var running = false
+    private var generation = 0L    // bumped by start(); a tick applies its poll result only to the generation that began it
 
     @Synchronized
     override fun start() {
@@ -39,6 +41,8 @@ class BikeSourceSupervisor(
         lastPushAt = now; lastFrameAt = now; lastPollAt = now; lastLogAt = now
         everFrame = false
         polling = false
+        running = true
+        generation++
         _state.value = ConnectionState.Unavailable
         source.start()
         scheduler.start(TICK_MS) { onTick() }
@@ -46,6 +50,8 @@ class BikeSourceSupervisor(
 
     @Synchronized
     override fun stop() {
+        running = false
+        generation++
         scheduler.stop()
         source.stop()
         polling = false
@@ -53,33 +59,45 @@ class BikeSourceSupervisor(
         _state.value = ConnectionState.Unavailable
     }
 
-    @Synchronized
+    /** The blocking binder poll runs outside the lock so start()/stop() on the main thread never wait on it. */
     private fun onTick() {
-        val now = clock()
-        val count = source.framesReceived
-        if (count != framesSeen) {                       // frames were pushed since we last looked
-            framesSeen = count
-            lastPushAt = now; lastFrameAt = now; everFrame = true
-            if (polling) { polling = false; Log.i(TAG, "push resumed, polling stopped") }
+        val now: Long
+        val gen: Long
+        val doPoll: Boolean
+        synchronized(this) {
+            if (!running) return
+            now = clock()
+            gen = generation
+            val count = source.framesReceived
+            if (count != framesSeen) {                   // frames were pushed since we last looked
+                framesSeen = count
+                lastPushAt = now; lastFrameAt = now; everFrame = true
+                if (polling) { polling = false; Log.i(TAG, "push resumed, polling stopped") }
+            }
+            if (!polling && now - lastPushAt >= PUSH_SILENCE_MS) {
+                polling = true
+                lastPollAt = now - POLL_PERIOD_MS        // first poll happens on this tick
+                Log.i(TAG, "no push for ${PUSH_SILENCE_MS}ms, polling getBikeData at 1 Hz")
+            }
+            doPoll = polling && now - lastPollAt >= POLL_PERIOD_MS
+            if (doPoll) lastPollAt = now
         }
-        if (!polling && now - lastPushAt >= PUSH_SILENCE_MS) {
-            polling = true
-            lastPollAt = now - POLL_PERIOD_MS            // first poll happens on this tick
-            Log.i(TAG, "no push for ${PUSH_SILENCE_MS}ms, polling getBikeData at 1 Hz")
-        }
-        if (polling && now - lastPollAt >= POLL_PERIOD_MS) {
-            lastPollAt = now
-            if (source.pollBikeData() != null) { lastFrameAt = now; everFrame = true }
-            framesSeen = source.framesReceived           // our own poll is not a push
-        }
-        _state.value = when {
-            everFrame && now - lastFrameAt < DISCONNECT_MS -> ConnectionState.Connected
-            everFrame -> ConnectionState.Disconnected
-            else -> ConnectionState.Unavailable
-        }
-        if (now - lastLogAt >= LOG_EVERY_MS) {
-            lastLogAt = now
-            Log.i(TAG, "bike frames=${source.framesReceived} state=${_state.value} polling=$polling")
+        val polled = doPoll && source.pollBikeData() != null
+        synchronized(this) {
+            if (!running || gen != generation) return    // stopped (or restarted) while the poll was in flight
+            if (doPoll) {
+                if (polled) { lastFrameAt = now; everFrame = true }
+                framesSeen = source.framesReceived       // our own poll is not a push
+            }
+            _state.value = when {
+                everFrame && now - lastFrameAt < DISCONNECT_MS -> ConnectionState.Connected
+                everFrame -> ConnectionState.Disconnected
+                else -> ConnectionState.Unavailable
+            }
+            if (now - lastLogAt >= LOG_EVERY_MS) {
+                lastLogAt = now
+                Log.i(TAG, "bike frames=${source.framesReceived} state=${_state.value} polling=$polling")
+            }
         }
     }
 
