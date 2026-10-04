@@ -77,4 +77,19 @@ class DraggableFrameLayoutTest {
         assertTrue(drags.isEmpty())
         assertEquals(0, ends)
     }
+
+    @Test
+    fun fractionalMovesDoNotDrift() {
+        layout.onInterceptTouchEvent(ev(MotionEvent.ACTION_DOWN, 100f, 100f))
+        val startX = 100f + slop + 5
+        layout.onInterceptTouchEvent(ev(MotionEvent.ACTION_MOVE, startX, 100f))
+        var x = startX
+        repeat(20) {
+            x += 0.6f
+            layout.onTouchEvent(ev(MotionEvent.ACTION_MOVE, x, 100f))
+        }
+        val totalDx = drags.sumOf { it.first }
+        // Truncation must not lose the sub-pixel remainder: total emitted equals the whole-pixel distance travelled.
+        assertEquals((x - 100f).toInt(), totalDx)
+    }
 }

@@ -20,12 +20,16 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import dev.pedalmate.R
 import dev.pedalmate.data.appContainer
+import dev.pedalmate.overlay.IntervalToast
 import dev.pedalmate.overlay.OverlayContent
 import dev.pedalmate.overlay.OverlayController
 import dev.pedalmate.overlay.OverlayPolicy
 import dev.pedalmate.overlay.OverlayPrefs
+import dev.pedalmate.overlay.OverlayToastWindow
 import dev.pedalmate.overlay.OverlayUiModel
 import dev.pedalmate.overlay.ShowResult
+import dev.pedalmate.overlay.ToastModel
+import dev.pedalmate.workout.WorkoutEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,6 +38,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -50,6 +55,7 @@ class RideService : Service() {
     private lateinit var overlay: OverlayController
     private lateinit var prefs: OverlayPrefs
     private var minimized by mutableStateOf(false)
+    private lateinit var toast: IntervalToast
     private var overlayJob: Job? = null
     private val container get() = appContainer
 
@@ -62,6 +68,15 @@ class RideService : Service() {
         )
         overlay = OverlayController(applicationContext, getSystemService(WindowManager::class.java))
         prefs = OverlayPrefs(container.settings)
+        toast = IntervalToast(uiScope, OverlayToastWindow(applicationContext, getSystemService(WindowManager::class.java)))
+        uiScope.launch {                          // subscribe before any ride starts: events have no replay
+            container.session.events.filterIsInstance<WorkoutEvent.IntervalChanged>()
+                .collect { toast.show(ToastModel.from(it)) }
+        }
+        uiScope.launch {
+            container.session.snapshot.map { it.status == RideStatus.IDLE }.distinctUntilChanged()
+                .collect { idle -> if (idle) toast.cancel() }
+        }
         overlayJob = uiScope.launch {
             val saved = prefs.load()
             minimized = saved.minimized
@@ -161,6 +176,7 @@ class RideService : Service() {
     override fun onDestroy() {
         overlay.hide()                            // the window must not leak with the service
         overlayJob?.cancel()
+        toast.cancel()
         uiScope.cancel()
         scope.cancel()                            // ticker only; the session lives on in AppContainer
         super.onDestroy()

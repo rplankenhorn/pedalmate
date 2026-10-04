@@ -64,7 +64,8 @@ class DraggableFrameLayout(
     private fun emitDelta(ev: MotionEvent) {
         val dx = (ev.rawX - lastX).toInt()
         val dy = (ev.rawY - lastY).toInt()
-        lastX = ev.rawX; lastY = ev.rawY
+        // Advance by what was emitted, not to rawX/rawY, so the sub-pixel remainder carries to the next move.
+        lastX += dx; lastY += dy
         if (dx != 0 || dy != 0) onDrag(dx, dy)
     }
 }
