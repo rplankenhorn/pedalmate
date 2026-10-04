@@ -2,3 +2,17 @@
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.keystore
