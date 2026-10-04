@@ -1,6 +1,7 @@
 // Derived from OpenRide (Apache-2.0), app/src/main/java/dev/digitalducktape/openride/core/heartrate/BleHeartRateDataSource.kt. Modified by PedalMate.
 package dev.pedalmate.heartrate
 
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
@@ -147,7 +148,7 @@ class BleHeartRateDataSource(
                 return
             }
             val device = adapter.getRemoteDevice(deviceAddress)
-            gatt = device.connectGatt(context, false, gattCallback)
+            gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
             if (gatt == null) {
                 _connectionState.value = ConnectionState.Unavailable
             }
