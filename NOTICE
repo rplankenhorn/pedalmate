@@ -1,0 +1,30 @@
+PedalMate
+Copyright 2026 Robbie Plankenhorn
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+PedalMate is an independent, non-commercial personal project. It is not
+affiliated with, authorized, sponsored, or endorsed by Peloton Interactive,
+Inc. or Lichess. "Peloton" and "Lichess" are used only descriptively to
+identify the hardware and services PedalMate interoperates with.
+
+This product includes software derived from OpenRide (Apache License 2.0).
+OpenRide's NOTICE is reproduced verbatim below, as required by Apache-2.0
+section 4(d).
+
+------------------------------------------------------------------------
+OpenRide
+Copyright 2026 The OpenRide Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+OpenRide is an independent, non-commercial project. It is not affiliated with,
+authorized, sponsored, or endorsed by Peloton Interactive, Inc. "Peloton" and
+"Peloton Bike" are trademarks of Peloton Interactive, Inc., used here only
+descriptively to identify the hardware OpenRide interoperates with (nominative
+fair use). OpenRide contains no Peloton source code, artwork, branding, audio,
+video, or class content.
+
+For the reverse-engineering / interoperability basis of the on-device sensor
+integration, see docs/INTEROP.md. For third-party attributions and dependency
+licenses, see THIRD_PARTY_NOTICES.md.

@@ -3,3 +3,4 @@ java = "zulu-17"
 
 [env]
 ANDROID_HOME = "{{env.HOME}}/Android/Sdk"
+ANDROID_AVD_HOME = "{{env.HOME}}/.config/.android/avd"
