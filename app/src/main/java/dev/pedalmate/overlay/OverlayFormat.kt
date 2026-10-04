@@ -11,6 +11,6 @@ fun formatClock(ms: Long): String {
 /** Formats a watt range for display; null and degenerate rows give `--`. */
 fun formatRange(range: ZoneRange?): String = when {
     range == null || range.isEmpty -> "--"
-    range.highWatts == null -> "Z${range.zone.number} ≥ ${range.lowWatts} W"
-    else -> "${range.lowWatts}–${range.highWatts} W"
+    range.highWatts == null -> "Z${range.zone.number} \u2265 ${range.lowWatts} W"
+    else -> "${range.lowWatts}\u2013${range.highWatts} W"
 }

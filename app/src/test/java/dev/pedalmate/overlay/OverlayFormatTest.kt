@@ -20,15 +20,15 @@ class OverlayFormatTest {
     }
 
     @Test fun formatRangeCases() {
-        assertEquals("263–299 W", formatRange(t.rangeOf(PowerZone.Z5)))
-        assertEquals("Z7 ≥ 375 W", formatRange(t.rangeOf(PowerZone.Z7)))
-        assertEquals("0–137 W", formatRange(t.rangeOf(PowerZone.Z1)))
+        assertEquals("263\u2013299 W", formatRange(t.rangeOf(PowerZone.Z5)))
+        assertEquals("Z7 \u2265 375 W", formatRange(t.rangeOf(PowerZone.Z7)))
+        assertEquals("0\u2013137 W", formatRange(t.rangeOf(PowerZone.Z1)))
         assertEquals("--", formatRange(null))
         assertEquals("--", formatRange(ZoneRange(PowerZone.Z1, 5, 3)))
     }
 
     @Test fun enDashIsU2013() {
-        assertTrue(formatRange(t.rangeOf(PowerZone.Z5)).contains('–'))
+        assertTrue(formatRange(t.rangeOf(PowerZone.Z5)).contains('\u2013'))
         assertFalse(formatRange(t.rangeOf(PowerZone.Z5)).contains('-'))
     }
 }

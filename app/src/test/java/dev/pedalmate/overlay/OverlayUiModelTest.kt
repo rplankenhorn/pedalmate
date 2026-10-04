@@ -39,7 +39,7 @@ class OverlayUiModelTest {
         assertEquals(PowerZone.Z5, m.zone)
         assertEquals("281", m.wattsText)
         assertNull(m.banner)
-        assertEquals("263–299 W", m.targetText)
+        assertEquals("263\u2013299 W", m.targetText)
         assertEquals("IN ZONE", m.statusText)
         assertEquals(TargetStatus.IN, m.targetStatus)
         assertEquals("Zone 5", m.intervalName)
@@ -74,7 +74,7 @@ class OverlayUiModelTest {
             assertEquals("--", m.resistanceText)
             assertNull(m.statusText)
             assertEquals("NO SENSOR", m.pillText)
-            assertEquals("263–299 W", m.targetText)
+            assertEquals("263\u2013299 W", m.targetText)
             assertEquals("2:05", m.intervalTime)
         }
     }
@@ -123,7 +123,7 @@ class OverlayUiModelTest {
 
     @Test fun openEndedTarget() {
         val m = OverlayUiModel.from(live().copy(targetZone = PowerZone.Z7, targetRange = table.rangeOf(PowerZone.Z7)))
-        assertEquals("Z7 ≥ 375 W", m.targetText)
+        assertEquals("Z7 \u2265 375 W", m.targetText)
     }
 
     @Test fun nullHrAndResistance() {
