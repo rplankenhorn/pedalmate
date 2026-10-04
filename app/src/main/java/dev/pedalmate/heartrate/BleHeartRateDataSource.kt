@@ -18,14 +18,14 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Real [HeartRateDataSource] for a single paired BLE strap, over the standard Bluetooth GATT
- * **Heart Rate Service** (`0x180D`) / **Heart Rate Measurement** characteristic (`0x2A37`) —
+ * **Heart Rate Service** (`0x180D`) / **Heart Rate Measurement** characteristic (`0x2A37`) -
  * every commodity chest strap and most fitness watches implement this (PRD P1-4, T17).
  *
  * ## Protocol
  * - Connect via [android.bluetooth.BluetoothDevice.connectGatt], discover services, find the
  *   Heart Rate Measurement characteristic, enable notifications on it (write
  *   `ENABLE_NOTIFICATION_VALUE` to its Client Characteristic Configuration descriptor,
- *   `0x2902` — the standard GATT subscribe dance, not anything strap-specific).
+ *   `0x2902` - the standard GATT subscribe dance, not anything strap-specific).
  * - Each notification's raw bytes are decoded by [HeartRateParser] (reimplemented from the
  *   public Bluetooth SIG spec).
  *
@@ -39,8 +39,8 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * **Hardware caveat (T17/#17): this project has no physical BLE heart-rate strap.** This class
  * is built correctly against the public `android.bluetooth` GATT client APIs and the
- * Bluetooth SIG spec, but the actual connect → discover → subscribe → notify sequence has
- * **not been exercised against a real strap** — that needs someone with a physical device to
+ * Bluetooth SIG spec, but the actual connect -> discover -> subscribe -> notify sequence has
+ * **not been exercised against a real strap** - that needs someone with a physical device to
  * confirm. [HeartRateParser]'s byte-level decoding, which this class merely feeds real GATT
  * bytes into, *is* independently unit-tested (see [HeartRateParserTest]).
  */
@@ -104,7 +104,7 @@ class BleHeartRateDataSource(
                         g.writeDescriptor(descriptor)
                     }
                 }
-                // Stay Unavailable/Disconnected until a real frame arrives — see class doc.
+                // Stay Unavailable/Disconnected until a real frame arrives - see class doc.
             } catch (e: SecurityException) {
                 Log.w(TAG, "Notification subscribe denied", e)
                 _connectionState.value = ConnectionState.Unavailable
@@ -114,7 +114,7 @@ class BleHeartRateDataSource(
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
             // The pre-API-33 callback signature (deprecated but still invoked by the platform
-            // on every supported API level here, including 33+) — kept to one overload rather
+            // on every supported API level here, including 33+) - kept to one overload rather
             // than duplicating logic across both signatures.
             val bytes = characteristic?.value ?: return
             handleFrame(bytes)
@@ -136,7 +136,7 @@ class BleHeartRateDataSource(
     }
 
     /**
-     * Connects to [deviceAddress]. Safe on any device/state — an invalid address, a missing
+     * Connects to [deviceAddress]. Safe on any device/state - an invalid address, a missing
      * adapter, or a missing runtime permission all degrade to [ConnectionState.Unavailable]
      * rather than throwing. Call once; call [stop] to release.
      */
@@ -153,7 +153,7 @@ class BleHeartRateDataSource(
                 _connectionState.value = ConnectionState.Unavailable
             }
         } catch (e: SecurityException) {
-            Log.w(TAG, "Connect denied — missing BLUETOOTH_CONNECT permission", e)
+            Log.w(TAG, "Connect denied - missing BLUETOOTH_CONNECT permission", e)
             _connectionState.value = ConnectionState.Unavailable
         } catch (e: IllegalArgumentException) {
             Log.w(TAG, "Invalid BLE device address: $deviceAddress", e)
@@ -172,7 +172,7 @@ class BleHeartRateDataSource(
             gatt?.disconnect()
             gatt?.close()
         } catch (_: SecurityException) {
-            // Permission revoked mid-session — nothing more we can do, just drop the reference.
+            // Permission revoked mid-session - nothing more we can do, just drop the reference.
         }
         gatt = null
     }

@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * Pure-JVM coverage for the BLE permission helpers (PRD P1-4, T17): the [reduceBlePermissionState] reducer that the pairing screen leans on
- * instead of re-deriving the branching inline. No Robolectric — these are ordinary functions.
+ * instead of re-deriving the branching inline. No Robolectric - these are ordinary functions.
  */
 class BlePermissionsTest {
 
