@@ -1,0 +1,13 @@
+{
+  "id": "intro-20",
+  "name": "Intro 20",
+  "steps": [
+    { "label": "Warmup",   "seconds": 300, "zone": 2 },
+    { "label": "Zone 3",   "seconds": 180, "zone": 3 },
+    { "label": "Zone 2",   "seconds": 120, "zone": 2 },
+    { "label": "Zone 3",   "seconds": 180, "zone": 3 },
+    { "label": "Zone 2",   "seconds": 120, "zone": 2 },
+    { "label": "Zone 4",   "seconds": 120, "zone": 4 },
+    { "label": "Cooldown", "seconds": 180, "zone": 1 }
+  ]
+}

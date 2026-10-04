@@ -1,0 +1,15 @@
+{
+  "id": "pz-43",
+  "name": "Power Zone 43",
+  "description": "Warmup 10:00, Z3/Z4/Z3/Z4 blocks, Z5 3:00, Z2 5:00, cooldown 5:00.",
+  "steps": [
+    { "label": "Warmup",   "seconds": 600, "zone": 2 },
+    { "label": "Zone 3",   "seconds": 300, "zone": 3 },
+    { "label": "Zone 4",   "seconds": 300, "zone": 4 },
+    { "label": "Zone 3",   "seconds": 300, "zone": 3 },
+    { "label": "Zone 4",   "seconds": 300, "zone": 4 },
+    { "label": "Zone 5",   "seconds": 180, "zone": 5 },
+    { "label": "Zone 2",   "seconds": 300, "zone": 2 },
+    { "label": "Cooldown", "seconds": 300, "zone": 1 }
+  ]
+}

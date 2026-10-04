@@ -1,0 +1,10 @@
+{
+  "id": "ftp-test",
+  "name": "FTP Test",
+  "description": "20-minute test window; average power x 0.95 = FTP.",
+  "steps": [
+    { "label": "Warmup",   "seconds": 600,  "zone": 2 },
+    { "label": "FTP Test", "seconds": 1200, "tag": "ftp-window" },
+    { "label": "Cooldown", "seconds": 300,  "zone": 1 }
+  ]
+}

@@ -197,3 +197,38 @@ Escalation ladder: Sonnet → Opus → main session. Main session never reads so
 3. `bd init` + create epics/issues per tree above.
 4. Invoke `superpowers:writing-plans` for Phase A → `docs/superpowers/plans/2026-10-04-phase-a.md`, then `superpowers:subagent-driven-development`: **Sonnet** implementer per task → **Opus** reviewer per task (spec compliance + code quality + runs tests) → main session relays verdict, closes bead.
 5. Phase B plan written after A16 passes on the bike.
+
+## Workout JSON schema (added in A5)
+
+Workouts are JSON files under `app/src/main/assets/workouts/`; the file name without `.json` equals the `id`. Example, `pz-43.json`:
+
+```json
+{
+  "id": "pz-43",
+  "name": "Power Zone 43",
+  "description": "Warmup 10:00, Z3/Z4/Z3/Z4 blocks, Z5 3:00, Z2 5:00, cooldown 5:00.",
+  "steps": [
+    { "label": "Warmup",   "seconds": 600, "zone": 2 },
+    { "label": "Zone 3",   "seconds": 300, "zone": 3 },
+    { "label": "Zone 4",   "seconds": 300, "zone": 4 },
+    { "label": "Zone 3",   "seconds": 300, "zone": 3 },
+    { "label": "Zone 4",   "seconds": 300, "zone": 4 },
+    { "label": "Zone 5",   "seconds": 180, "zone": 5 },
+    { "label": "Zone 2",   "seconds": 300, "zone": 2 },
+    { "label": "Cooldown", "seconds": 300, "zone": 1 }
+  ]
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `id` | string | yes | `^[a-z0-9][a-z0-9-]{0,39}$` |
+| `name` | string | yes | non-blank, at most 60 chars |
+| `description` | string | no | free text |
+| `steps` | array | yes | 1..200 entries |
+| `steps[].label` | string | yes | non-blank, at most 40 chars |
+| `steps[].seconds` | int | yes | 1..21600 |
+| `steps[].zone` | int | no | omitted/null (no target) or 1..7 |
+| `steps[].tag` | string | no | non-blank, at most 20 chars; `"ftp-window"` marks the 20-minute FTP test window (used in Phase B) |
+
+Validation: unknown JSON keys are ignored; missing required keys are an error; all violations are collected and reported together. Zone is explicit per step; null zone means no power target. Zone is never inferred from the label.

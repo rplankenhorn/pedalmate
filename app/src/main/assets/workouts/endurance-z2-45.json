@@ -1,0 +1,9 @@
+{
+  "id": "endurance-z2-45",
+  "name": "Endurance Z2 45",
+  "steps": [
+    { "label": "Warmup",   "seconds": 300,  "zone": 1 },
+    { "label": "Zone 2",   "seconds": 2100, "zone": 2 },
+    { "label": "Cooldown", "seconds": 300,  "zone": 1 }
+  ]
+}
