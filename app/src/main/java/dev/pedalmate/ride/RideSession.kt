@@ -18,6 +18,9 @@ sealed interface StartResult {
     data object Started : StartResult
     data object UnknownWorkout : StartResult
     data object AlreadyRunning : StartResult
+
+    /** A stop arrived while the start was still suspended; no ride is running. */
+    data object Stopped : StartResult
 }
 
 /**
@@ -40,6 +43,7 @@ class RideSession(
 
     private var status = RideStatus.IDLE
     private var starting = false
+    private var stopRequested = false   // a stop() that arrived while begin() was suspended
     private var holdsHub = false
     private var engine: WorkoutEngine? = null
     private var workoutName: String? = null
@@ -66,10 +70,11 @@ class RideSession(
         synchronized(this) {
             if (starting || status == RideStatus.RUNNING || status == RideStatus.PAUSED) return StartResult.AlreadyRunning
             starting = true
+            stopRequested = false
             wasFinished = status == RideStatus.FINISHED
         }
         try {
-            if (wasFinished) stop()
+            if (wasFinished) teardown()
             ready()
             val ftp = ftpProvider()
             try {
@@ -80,7 +85,10 @@ class RideSession(
                 Log.w(TAG, "ride log unavailable; riding unrecorded", e)
             }
             hub.acquire()
+            val aborted: Boolean
             synchronized(this) {
+                aborted = stopRequested
+                if (aborted) return@synchronized
                 holdsHub = true
                 rideFtp = ftp
                 zoneTable = ZoneTable.forFtp(ftp)
@@ -103,9 +111,14 @@ class RideSession(
                 status = RideStatus.RUNNING
                 republish()
             }
+            if (aborted) {                            // stop() ran during our suspension: undo what we did
+                hub.release()
+                safeFinish()
+                return StartResult.Stopped
+            }
             return StartResult.Started
         } finally {
-            synchronized(this) { starting = false }
+            synchronized(this) { starting = false; stopRequested = false }
         }
     }
 
@@ -149,6 +162,11 @@ class RideSession(
     }
 
     suspend fun stop() {
+        synchronized(this) { if (starting) stopRequested = true }
+        teardown()
+    }
+
+    private suspend fun teardown() {
         val needsFinish: Boolean
         val release: Boolean
         synchronized(this) {

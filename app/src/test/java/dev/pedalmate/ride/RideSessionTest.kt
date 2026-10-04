@@ -208,6 +208,21 @@ class RideSessionTest {
         assertEquals(1, log.begins.size); assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
     }
 
+    @Test fun `stop during a suspended begin leaves no running zombie`() = runTest(UnconfinedTestDispatcher()) {
+        val gate = CompletableDeferred<Unit>()
+        val s = newSession(ready = { gate.await() })
+        var result: StartResult? = null
+        val job = launch { result = s.startWorkout("t") }
+        s.stop()                                   // STOP arrives while begin() is suspended on the ready gate
+        gate.complete(Unit); job.join()
+        assertEquals(StartResult.Stopped, result)
+        assertEquals(RideStatus.IDLE, s.snapshot.value.status); assertFalse(s.isActive)
+        assertEquals(bike.started, bike.stopped); assertEquals(hr.started, hr.stopped)   // hub balanced
+        assertEquals(log.begins.size, log.finishes)                                      // no begun-but-unfinished ride
+        assertEquals(StartResult.Started, s.startWorkout("t"))                           // flag does not leak into the next start
+        assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
+    }
+
     @Test fun `a failing ride log does not stop the ride`() = runTest(UnconfinedTestDispatcher()) {
         log.failBegin = true
         val s = newSession()

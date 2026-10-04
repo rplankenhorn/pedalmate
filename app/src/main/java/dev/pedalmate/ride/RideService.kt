@@ -129,10 +129,10 @@ class RideService : Service() {
         enterForeground()                         // the foreground contract comes first, whatever we decide next
         val session = container.session
         when (RideServicePolicy.decide(intent?.action, intent == null, session.isActive)) {
-            ServiceAction.START -> startRide(intent?.getStringExtra(EXTRA_WORKOUT_ID))
+            ServiceAction.START -> startRide(intent?.getStringExtra(EXTRA_WORKOUT_ID), startId)
             ServiceAction.CONTINUE -> ensureTicker()
             ServiceAction.REFRESH_OVERLAY -> { ensureTicker(); refreshOverlay() }
-            ServiceAction.STOP, ServiceAction.STOP_SELF -> stopRide()
+            ServiceAction.STOP, ServiceAction.STOP_SELF -> stopRide(startId)
         }
         return START_STICKY
     }
@@ -157,24 +157,37 @@ class RideService : Service() {
         }
     }
 
-    private fun startRide(workoutId: String?) {
+    private fun startRide(workoutId: String?, startId: Int) {
         scope.launch {
             val s = container.session
             val result = if (workoutId == null) s.startFreeRide() else s.startWorkout(workoutId)
             Log.i("PedalMate", "start ride workout=$workoutId result=$result")
-            if (result == StartResult.UnknownWorkout) stopRide() else ensureTicker()
+            when (result) {
+                StartResult.UnknownWorkout -> stopRide(startId)
+                StartResult.Stopped -> Unit           // the STOP that interrupted us finishes the service itself
+                else -> withContext(Dispatchers.Main.immediate) { ensureTicker() }
+            }
         }
     }
 
-    private fun stopRide() {
+    /**
+     * Ends the ride, then the service, but only if no later command re-activated the session:
+     * [stopSelfResult] with this command's [startId] is a no-op when a newer start is queued.
+     */
+    private fun stopRide(startId: Int) {
         container.scope.launch {                  // app scope: survives this service being destroyed
             withContext(NonCancellable) { container.session.stop() }
-            ticker?.cancel()
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            withContext(Dispatchers.Main.immediate) {
+                if (!container.session.isActive && stopSelfResult(startId)) {
+                    ticker?.cancel()
+                    ticker = null
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                }
+            }
         }
     }
 
+    /** Main-thread only: [ticker] is confined to the main thread so the check-then-launch cannot race. */
     private fun ensureTicker() {
         if (ticker?.isActive == true) return
         ticker = scope.launch {
