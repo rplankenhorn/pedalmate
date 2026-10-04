@@ -30,6 +30,7 @@ import dev.pedalmate.overlay.OverlayToastWindow
 import dev.pedalmate.overlay.OverlayUiModel
 import dev.pedalmate.overlay.ShowResult
 import dev.pedalmate.overlay.ToastModel
+import dev.pedalmate.ui.setup.SetupActivity
 import dev.pedalmate.workout.WorkoutEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -139,10 +140,14 @@ class RideService : Service() {
 
     private fun enterForeground() {
         val stop = PendingIntent.getService(this, 0, stopIntent(this), PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(
+            this, 1, Intent(this, SetupActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val n = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle("PedalMate ride in progress")
             .setOngoing(true)
+            .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())
             .build()
         val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE

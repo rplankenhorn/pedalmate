@@ -82,4 +82,10 @@ class RideServiceTest {
         assertTrue(container.session.isActive)
         assertFalse(shadowOf(service as Service).isStoppedBySelf)
     }
+
+    @Test fun `ride notification opens the setup screen`() {
+        runBlocking { container.session.startFreeRide() }
+        service.onStartCommand(null, 0, 1)         // CONTINUE: the foreground notification stays posted
+        assertNotNull(shadowOf(service as Service).lastForegroundNotification.contentIntent)
+    }
 }
