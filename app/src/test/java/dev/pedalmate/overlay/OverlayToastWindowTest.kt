@@ -21,7 +21,7 @@ class OverlayToastWindowTest {
     private val fake = FakeWindowManager()
     private var allowed = true
     private val window = OverlayToastWindow(ctx, fake.manager) { allowed }
-    private val m1 = ToastModel("NEXT INTERVAL", "ZONE 5", "263–299 W", "3:00")
+    private val m1 = ToastModel("NEXT INTERVAL", "ZONE 5", "263\u2013299 W", "3:00")
     private val m2 = ToastModel("NEXT INTERVAL", "COOLDOWN", null, "5:00")
 
     @Test fun showUsesExactWindowParams() {

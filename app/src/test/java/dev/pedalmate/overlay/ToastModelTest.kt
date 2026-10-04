@@ -20,13 +20,13 @@ class ToastModelTest {
 
     @Test fun zoneFiveInterval() {
         val m = to(step(5, "Zone 5", PowerZone.Z5, 180))
-        assertEquals(ToastModel("NEXT INTERVAL", "ZONE 5", "263–299 W", "3:00"), m)
+        assertEquals(ToastModel("NEXT INTERVAL", "ZONE 5", "263\u2013299 W", "3:00"), m)
     }
 
     @Test fun cooldown() {
         val m = to(step(7, "Cooldown", PowerZone.Z1, 300))
         assertEquals("COOLDOWN", m.title)
-        assertEquals("0–137 W", m.rangeText)
+        assertEquals("0\u2013137 W", m.rangeText)
         assertEquals("5:00", m.durationText)
     }
 
@@ -42,7 +42,7 @@ class ToastModelTest {
     }
 
     @Test fun zoneSevenIsOpenEnded() {
-        assertEquals("Z7 ≥ 375 W", to(step(6, "Zone 7", PowerZone.Z7, 30)).rangeText)
+        assertEquals("Z7 \u2265 375 W", to(step(6, "Zone 7", PowerZone.Z7, 30)).rangeText)
     }
 
     @Test fun titleIsLocaleSafe() {
