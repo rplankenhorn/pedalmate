@@ -128,8 +128,8 @@ class BleHeartRateDataSource(
             Log.w(TAG, "Malformed Heart Rate Measurement frame, dropping", e)
             return
         }
+        _bpm.value = measurement.bpm              // value first: a consumer that sees the new frame count must see its bpm
         frames++
-        _bpm.value = measurement.bpm
         if (_connectionState.value != ConnectionState.Connected) {
             _connectionState.value = ConnectionState.Connected
         }
