@@ -4,16 +4,19 @@ Device: Peloton Bike+ (board `topaz`, Android 10). Pair ADB first (OpenPelo wire
 
 ## Stage 1 (after A3): sensor proof
 
-- [ ] `adb shell getprop ro.product.board` prints `topaz`
-- [ ] Record: `adb shell wm size` = ____ ; `adb shell wm density` = ____ ; `adb shell getprop ro.build.version.sdk` = ____
-- [ ] `mise exec -- ./gradlew installRealDebug` succeeds (or `adb install -r app/build/outputs/apk/real/debug/app-real-debug.apk`)
-- [ ] App launches from the Peloton custom launcher (DoD 1)
-- [ ] Debug screen shows POWER / CADENCE / RESISTANCE
-- [ ] `adb logcat -s PedalMate:V PelotonBikeIface:V` shows the bind, then `bike frames=N state=Connected` with N growing about 20 per second
-- [ ] Pedalling: values plausible versus the stock Peloton UI and updating at about 20 Hz
-- [ ] Stop pedalling: power and cadence go to 0 (the screen still shows numbers; no red SENSOR LOST / NO SENSOR banner, which confirms the 1 Hz poll fallback works at idle)
-- [ ] `adb shell am force-stop com.onepeloton.affernetservice`: the rebinder recovers and frames resume within 30 s
-Result: PASS / FAIL  Notes:
+- [x] `adb shell getprop ro.product.board` prints `topaz`
+- [x] Record: `adb shell wm size` = 1920x1080 ; `adb shell wm density` = 240 ; `adb shell getprop ro.build.version.sdk` = 29
+- [x] `mise exec -- ./gradlew installRealDebug` succeeds (or `adb install -r app/build/outputs/apk/real/debug/app-real-debug.apk`)
+- [x] App launches from the Peloton custom launcher (DoD 1)
+- [x] Debug screen shows POWER / CADENCE / RESISTANCE
+- [x] `adb logcat -s PedalMate:V PelotonBikeIface:V` shows the bind, then `bike frames=N state=Connected` with N growing about 20 per second
+- [x] Pedalling: values plausible versus the stock Peloton UI and updating at about 20 Hz
+- [x] Stop pedalling: power and cadence go to 0 (the screen still shows numbers; no red SENSOR LOST / NO SENSOR banner, which confirms the 1 Hz poll fallback works at idle)
+- [x] `adb shell am force-stop com.onepeloton.affernetservice`: the rebinder recovers and frames resume within 30 s
+Result: PASS (2026-10-04)  Notes:
+  - Rebind: binding died at 10:33:07.336, reconnect attempts at 1000 ms then 2000 ms, recovered at 10:33:09.352
+  - GMS crash spam (`com.google.android.gms.persistent`, "Failed to find provider com.google.android.gsf.gservices") is pre-existing and unrelated
+  - Peloton's own activation activity (`com.peloton.activity/.activation.ActivationActivity`) self-launches over foreground apps; watch for it in Stage 2's "no Peloton activity takes over" item
 
 ## Stage 2 (A16): overlay ride
 
