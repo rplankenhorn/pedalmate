@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "pedalmate",
+  "project_id": "615d0f49-3074-4937-a2a3-3c1379250108"
+}
