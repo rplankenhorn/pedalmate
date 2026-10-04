@@ -156,12 +156,14 @@ private fun RightColumn(state: SetupUiState, hr: HrCardState, pairing: PairingSt
                 Button(onClick = actions.onStart, enabled = state.canStart) { Text("START RIDE") }
             }
             if (state.rideStatus != RideStatus.IDLE) {
-                if (state.rideStatus == RideStatus.PAUSED) {
-                    Button(onClick = actions.onResume) { Text("RESUME") }
-                } else if (state.rideStatus == RideStatus.RUNNING) {
-                    Button(onClick = actions.onPause) { Text("PAUSE") }
+                if (state.showWorkoutControls) {
+                    if (state.rideStatus == RideStatus.PAUSED) {
+                        Button(onClick = actions.onResume) { Text("RESUME") }
+                    } else if (state.rideStatus == RideStatus.RUNNING) {
+                        Button(onClick = actions.onPause) { Text("PAUSE") }
+                    }
+                    Button(onClick = actions.onSkip) { Text("SKIP") }
                 }
-                if (inRide) Button(onClick = actions.onSkip) { Text("SKIP") }
                 Button(onClick = actions.onStop) { Text("STOP") }
             }
         }

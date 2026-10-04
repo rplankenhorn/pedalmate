@@ -49,6 +49,8 @@ data class SetupUiState(
     val canStart: Boolean,
     val startBlockedReason: String?,
     val startWarning: String?,
+    /** PAUSE/RESUME/SKIP only act on a workout; a free ride has no engine to pause or skip. */
+    val showWorkoutControls: Boolean,
     val hrDeviceLabel: String?,
     val message: String?,
 )
@@ -113,6 +115,7 @@ class SetupViewModel(
                 !l.overlayGranted -> OVERLAY_MISSING
                 else -> null
             },
+            showWorkoutControls = active && snap.workoutName != null,
             hrDeviceLabel = hrLabel, message = l.message,
         )
     }

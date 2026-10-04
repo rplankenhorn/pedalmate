@@ -138,6 +138,18 @@ class SetupViewModelTest {
     }
 
     @Test
+    fun `pause and skip controls only exist for a running workout`() = runTest {
+        val v = vm()
+        assertFalse(v.state.value.showWorkoutControls)
+        snapshot.value = RideSnapshot.idle(null).copy(status = RideStatus.RUNNING, workoutName = null)   // free ride
+        assertFalse(v.state.value.showWorkoutControls)
+        snapshot.value = RideSnapshot.idle(null).copy(status = RideStatus.RUNNING, workoutName = "Test One")
+        assertTrue(v.state.value.showWorkoutControls)
+        snapshot.value = RideSnapshot.idle(null).copy(status = RideStatus.PAUSED, workoutName = "Test One")
+        assertTrue(v.state.value.showWorkoutControls)
+    }
+
+    @Test
     fun `typing through intermediate values`() = runTest {
         val v = vm()
         v.onFtpTextChanged("6")
