@@ -44,7 +44,8 @@ class SetupActivity : ComponentActivity() {
     private val permissionHelper by lazy { PermissionHelper(applicationContext) }
     private var permissionItems by mutableStateOf(emptyList<PermissionItem>())
     private var diagnostics by mutableStateOf(false)
-    private val hrPairing by lazy { HrPairingController(SensorFactory.createBleScanner(applicationContext), appContainer.hrPairing, lifecycleScope) }
+    private val hrPairingHolder = lazy { HrPairingController(SensorFactory.createBleScanner(applicationContext), appContainer.hrPairing, lifecycleScope) }
+    private val hrPairing by hrPairingHolder
     private val blePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         refreshPermissions()
         if (!PermissionPlanner.blePermissionsGranted(result)) vm.showMessage(PermissionPlanner.HR_SCAN_BLOCKED_MESSAGE)
@@ -109,7 +110,7 @@ class SetupActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        hrPairing.stopScan()
+        if (hrPairingHolder.isInitialized()) hrPairing.stopScan()   // never build a scanner just to stop it
         appContainer.hub.release()
         super.onStop()
     }
