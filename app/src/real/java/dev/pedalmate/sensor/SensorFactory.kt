@@ -13,7 +13,10 @@ import kotlinx.coroutines.CoroutineScope
 object SensorFactory {
     const val FLAVOR = "real"
 
-    /** Real Bike+ source behind the supervisor. [scope] hosts the supervisor's 250 ms tick. */
+    /**
+     * Real Bike+ source behind the supervisor. [scope] hosts the supervisor's 250 ms tick and must run on
+     * Dispatchers.Default: the 1 Hz pollBikeData() is a blocking binder call on its dispatcher.
+     */
     fun createBikeSource(context: Context, scope: CoroutineScope): BoundBikeDataSource =
         BikeSourceSupervisor(
             source = PelotonBikeInterfaceDataSource(context.applicationContext),
