@@ -17,6 +17,7 @@ data class OverlayUiModel(
     val targetText: String?,
     val targetStatus: TargetStatus?,
     val statusText: String?,
+    val paused: Boolean,
     val intervalName: String,
     val intervalTime: String?,
     val nextText: String?,
@@ -68,12 +69,17 @@ data class OverlayUiModel(
                 banner = if (bikeLive) null else NO_SENSOR,
                 targetText = targetText,
                 targetStatus = s.targetStatus,
-                statusText = when (s.targetStatus) {
-                    TargetStatus.BELOW -> "BELOW"
-                    TargetStatus.IN -> "IN ZONE"
-                    TargetStatus.ABOVE -> "ABOVE"
-                    null -> null
+                statusText = if (s.status == RideStatus.PAUSED) {
+                    "PAUSED"
+                } else {
+                    when (s.targetStatus) {
+                        TargetStatus.BELOW -> "BELOW"
+                        TargetStatus.IN -> "IN ZONE"
+                        TargetStatus.ABOVE -> "ABOVE"
+                        null -> null
+                    }
                 },
+                paused = s.status == RideStatus.PAUSED,
                 intervalName = intervalName,
                 intervalTime = intervalTime,
                 nextText = nextText,

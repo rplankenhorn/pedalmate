@@ -65,9 +65,10 @@ private fun Panel(model: OverlayUiModel, onToggle: () -> Unit) {
         }
         if (model.targetText != null) {
             Text("Target ${model.targetText}", color = Color.White, fontSize = 16.sp)
-            if (model.statusText != null) {
-                Text(model.statusText, color = statusColor(model.targetStatus), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
+        }
+        if (model.statusText != null) {
+            val color = if (model.paused) Color(0xFFFFC107) else statusColor(model.targetStatus)
+            Text(model.statusText, color = color, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         Text(model.intervalName, color = Color.White, fontSize = 20.sp)
         if (model.intervalTime != null) Text(model.intervalTime, color = Color.White, fontSize = 36.sp)

@@ -59,6 +59,12 @@ class OverlayUiModelTest {
         assertNull(OverlayUiModel.from(live().copy(targetStatus = null)).statusText)
     }
 
+    @Test fun pausedShowsPausedStatusInsteadOfTargetStatus() {
+        val m = OverlayUiModel.from(live().copy(status = RideStatus.PAUSED))
+        assertEquals("PAUSED", m.statusText)
+        assertEquals("RUNNING status keeps the target status", "IN ZONE", OverlayUiModel.from(live()).statusText)
+    }
+
     @Test fun dropoutShowsNoSensorAndDashes() {
         for (state in listOf(ConnectionState.Disconnected, ConnectionState.Unavailable)) {
             val m = OverlayUiModel.from(
