@@ -80,8 +80,7 @@ class RideService : Service() {
                 .collect { idle -> if (idle) toast.cancel() }
         }
         overlayJob = uiScope.launch {
-            val saved = prefs.load()
-            minimized = saved.minimized
+            minimized = prefs.load().minimized
             container.session.snapshot
                 .map { OverlayPolicy.directive(it.status) }
                 .distinctUntilChanged()
@@ -91,7 +90,7 @@ class RideService : Service() {
                         overlay.hide()
                         return@collect
                     }
-                    showOverlay(saved)
+                    showOverlay(prefs.load())      // latest saved position, not the one read at service creation
                 }
         }
     }
