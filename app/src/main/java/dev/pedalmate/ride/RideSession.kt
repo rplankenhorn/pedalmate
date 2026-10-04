@@ -75,6 +75,8 @@ class RideSession(
         }
         try {
             if (wasFinished) teardown()
+            hub.acquire()                             // before any real suspension: the Activity may release its own hold any moment
+            synchronized(this) { holdsHub = true }
             ready()
             val ftp = ftpProvider()
             try {
@@ -84,12 +86,10 @@ class RideSession(
             } catch (e: Exception) {
                 Log.w(TAG, "ride log unavailable; riding unrecorded", e)
             }
-            hub.acquire()
             val aborted: Boolean
             synchronized(this) {
                 aborted = stopRequested
                 if (aborted) return@synchronized
-                holdsHub = true
                 rideFtp = ftp
                 zoneTable = ZoneTable.forFtp(ftp)
                 workoutName = def?.name
@@ -112,14 +112,23 @@ class RideSession(
                 republish()
             }
             if (aborted) {                            // stop() ran during our suspension: undo what we did
-                hub.release()
+                releaseHold()                         // no-op when stop() already released it
                 safeFinish()
                 return StartResult.Stopped
             }
             return StartResult.Started
+        } catch (t: Throwable) {
+            releaseHold()
+            throw t
         } finally {
             synchronized(this) { starting = false; stopRequested = false }
         }
+    }
+
+    /** Releases the hub hold taken by [begin] at most once; [stop] shares the same single-release flag. */
+    private fun releaseHold() {
+        val release = synchronized(this) { holdsHub.also { holdsHub = false } }
+        if (release) hub.release()
     }
 
     @Synchronized fun pause() {

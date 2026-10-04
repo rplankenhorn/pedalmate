@@ -223,6 +223,31 @@ class RideSessionTest {
         assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
     }
 
+    @Test fun `sensors are acquired before the first suspension`() = runTest(UnconfinedTestDispatcher()) {
+        val gate = CompletableDeferred<Unit>()
+        val s = newSession(ready = { gate.await() })
+        val job = launch { s.startWorkout("t") }
+        assertEquals(1, bike.started); assertEquals(1, hr.started)     // held while the ready gate is still closed
+        assertEquals(RideStatus.IDLE, s.snapshot.value.status)
+        gate.complete(Unit); job.join()
+        assertEquals(1, bike.started); assertEquals(0, bike.stopped)   // still one hold, acquired once
+    }
+
+    @Test fun `a failed start releases the early hold exactly once`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(ready = { throw IllegalStateException("boom") })
+        try { s.startWorkout("t"); fail("expected the failure to propagate") } catch (e: IllegalStateException) { /* expected */ }
+        assertEquals(1, bike.started); assertEquals(1, bike.stopped)
+        assertFalse(s.isActive)
+        s.stop()                                                        // a later stop must not double-release
+        assertEquals(1, bike.stopped)
+    }
+
+    @Test fun `a rejected second start does not acquire`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("t")
+        s.startWorkout("t")
+        assertEquals(1, bike.started)
+    }
+
     @Test fun `a failing ride log does not stop the ride`() = runTest(UnconfinedTestDispatcher()) {
         log.failBegin = true
         val s = newSession()
