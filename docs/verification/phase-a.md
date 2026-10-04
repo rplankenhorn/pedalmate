@@ -34,5 +34,13 @@ Result: PASS (2026-10-04)  Notes:
 - [ ] 10 minutes without touching the screen: screen stays on, no Peloton activity takes over
 - [ ] Heart rate via iPhone relay (BlueHeart / HeartCast / HR Broadcast): appears; also reconnects after the phone sleeps and wakes
 - [ ] Pull the DB with its WAL files: `for f in pedalmate.db pedalmate.db-wal pedalmate.db-shm; do adb exec-out run-as dev.pedalmate cat databases/$f > $f; done`; a ride row with samples exists and has `endedAt` (a missing -wal/-shm, already checkpointed, yields an empty local file and is not a failure)
+- [ ] Overlay tap-through confirmed with Lichess in front: a piece move succeeds while the panel and an interval toast are both on screen
+- [ ] Toast dismissal timed from logcat: it goes away about 4 s after the last interval change
+- [ ] Real BLE scan from PAIR HR STRAP lists the iPhone relay
+- [ ] If the pairing scan returns nothing, check logcat for "scanning too frequently" (two scanners can run at once: pairing and the connector)
+- [ ] Record which iPhone relay app was used and whether it was in the foreground: ____ . iOS moves service UUIDs to the overflow area when an app is backgrounded, so the 0x180D-filtered scan may be blind; the fallback would be an unfiltered scan matched by saved name
+- [ ] Overlay permission granted mid-ride (ride started with it missing, warning shown): after returning to PedalMate the panel appears without restarting the ride (I2)
+- [ ] Logcat watch list, note any hit: `typed startForeground`, `overlay not shown`, `interval toast not shown`, `scan failed`, `riding unrecorded`
+- [ ] Peloton's ActivationActivity may self-launch: back out of it and note when it happened: ____
 - [ ] Paste relevant logcat excerpts below (`adb logcat -s PedalMate:V PelotonBikeIface:V BleHeartRate:V`)
 Result: PASS / FAIL  Notes:
