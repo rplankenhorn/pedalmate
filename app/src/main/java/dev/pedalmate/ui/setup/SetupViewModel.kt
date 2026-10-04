@@ -161,7 +161,10 @@ class SetupViewModel(
     fun resume() = commands.resume()
     fun skip() = commands.skip()
     fun dismissMessage() = say(null)
-    fun say(m: String?) = local.update { it.copy(message = m) }
+    private fun say(m: String?) = local.update { it.copy(message = m) }
+
+    /** Shows [text] in the message bar (used by the Activity for hints such as the overlay adb command). */
+    fun showMessage(text: String) = say(text)
 }
 
 /** Builds [SetupViewModel] from the app container. */

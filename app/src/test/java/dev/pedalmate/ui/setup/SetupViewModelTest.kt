@@ -276,4 +276,13 @@ class SetupViewModelTest {
         assertNull(v.onLaunchLichessRequested())
         assertTrue(v.state.value.message!!.contains("Lichess not found"))
     }
+
+    @Test
+    fun `showMessage publishes and dismiss clears`() = runTest {
+        val v = vm()
+        v.showMessage("hello")
+        assertEquals("hello", v.state.value.message)
+        v.dismissMessage()
+        assertNull(v.state.value.message)
+    }
 }

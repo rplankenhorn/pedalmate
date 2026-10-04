@@ -2,12 +2,14 @@ package dev.pedalmate.ui.setup
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dev.pedalmate.data.appContainer
+import dev.pedalmate.heartrate.HrPairingController
+import dev.pedalmate.heartrate.requiredBlePermissions
+import dev.pedalmate.sensor.SensorFactory
 import dev.pedalmate.ui.debug.CueDebugRow
 import dev.pedalmate.ui.debug.SensorDebugScreen
 import dev.pedalmate.ui.theme.PedalMateTheme
@@ -35,6 +40,12 @@ class SetupActivity : ComponentActivity() {
     }
     private var overlayGranted by mutableStateOf(false)
     private var diagnostics by mutableStateOf(false)
+    private val hrPairing by lazy { HrPairingController(SensorFactory.createBleScanner(applicationContext), appContainer.hrPairing, lifecycleScope) }
+    private val blePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.all { it }) hrPairing.startScan() else vm.showMessage(
+            "Bluetooth scan needs the Location permission. Run: adb shell pm grant $packageName android.permission.ACCESS_FINE_LOCATION",
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,7 +68,11 @@ class SetupActivity : ComponentActivity() {
             onPackageChange = vm::onLichessPackageChanged,
             onDismissMessage = vm::dismissMessage,
             onShowDiagnostics = { diagnostics = true },
-            onPairHr = { vm.say("HR pairing arrives with A14H") },
+            onPairHr = ::pairHr,
+            onScanHr = { hrPairing.startScan() },
+            onPickStrap = hrPairing::select,
+            onForgetHr = hrPairing::forget,
+            onClosePairing = hrPairing::stopScan,
         )
         setContent {
             PedalMateTheme {
@@ -78,7 +93,8 @@ class SetupActivity : ComponentActivity() {
                 } else {
                     val bpm by c.hub.hr.bpm.collectAsStateWithLifecycle()
                     val hrState by c.hub.hr.connectionState.collectAsStateWithLifecycle()
-                    SetupScreen(state, HrCardState(state.hrDeviceLabel, hrState, bpm), overlayGranted, actions)
+                    val pairing by hrPairing.state.collectAsStateWithLifecycle()
+                    SetupScreen(state, HrCardState(state.hrDeviceLabel, hrState, bpm), pairing, overlayGranted, actions)
                 }
             }
         }
@@ -90,6 +106,7 @@ class SetupActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        hrPairing.stopScan()
         appContainer.hub.release()
         super.onStop()
     }
@@ -97,6 +114,11 @@ class SetupActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         overlayGranted = Settings.canDrawOverlays(this)
+    }
+
+    private fun pairHr() {
+        val missing = requiredBlePermissions().filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) hrPairing.startScan() else blePermissionLauncher.launch(missing.toTypedArray())
     }
 
     private fun launchLichess(pkg: String) {
@@ -108,7 +130,7 @@ class SetupActivity : ComponentActivity() {
         try {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         } catch (e: ActivityNotFoundException) {
-            vm.say("Run: adb shell appops set $packageName SYSTEM_ALERT_WINDOW allow")
+            vm.showMessage("Run: adb shell appops set $packageName SYSTEM_ALERT_WINDOW allow")
         }
     }
 }

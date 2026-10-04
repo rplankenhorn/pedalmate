@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.pedalmate.heartrate.BleDevice
+import dev.pedalmate.heartrate.PairingState
 import dev.pedalmate.ride.RideStatus
 import dev.pedalmate.sensor.ConnectionState
 
@@ -55,6 +57,10 @@ data class SetupActions(
     val onDismissMessage: () -> Unit,
     val onShowDiagnostics: () -> Unit,
     val onPairHr: () -> Unit,
+    val onScanHr: () -> Unit,
+    val onPickStrap: (BleDevice) -> Unit,
+    val onForgetHr: () -> Unit,
+    val onClosePairing: () -> Unit,
 )
 
 private val amber = Color(0xFFFFB300)
@@ -65,14 +71,14 @@ private val zoneColors = listOf(
 
 /** The launcher screen: FTP, workout picker, ride controls, permissions and sensors. Landscape, two columns, inline only. */
 @Composable
-fun SetupScreen(state: SetupUiState, hr: HrCardState, overlayGranted: Boolean, actions: SetupActions) {
+fun SetupScreen(state: SetupUiState, hr: HrCardState, pairing: PairingState, overlayGranted: Boolean, actions: SetupActions) {
     Column(Modifier.fillMaxSize().background(Color.Black).padding(24.dp)) {
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 FtpCard(state, actions)
                 WorkoutPicker(state, actions, Modifier.weight(1f))
             }
-            RightColumn(state, hr, overlayGranted, actions, Modifier.weight(1f).fillMaxHeight())
+            RightColumn(state, hr, pairing, overlayGranted, actions, Modifier.weight(1f).fillMaxHeight())
         }
         state.message?.let { m ->
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -138,7 +144,7 @@ private fun WorkoutPicker(state: SetupUiState, actions: SetupActions, modifier: 
 }
 
 @Composable
-private fun RightColumn(state: SetupUiState, hr: HrCardState, overlayGranted: Boolean, actions: SetupActions, modifier: Modifier) {
+private fun RightColumn(state: SetupUiState, hr: HrCardState, pairing: PairingState, overlayGranted: Boolean, actions: SetupActions, modifier: Modifier) {
     var advanced by remember { mutableStateOf(false) }
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val inRide = state.rideStatus == RideStatus.RUNNING || state.rideStatus == RideStatus.PAUSED
@@ -163,9 +169,11 @@ private fun RightColumn(state: SetupUiState, hr: HrCardState, overlayGranted: Bo
             if (!overlayGranted) OutlinedButton(onClick = actions.onGrantOverlay) { Text("GRANT") }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            val bpm = hr.bpm?.let { " $it bpm" }.orEmpty()
-            Text("HR: ${hr.deviceLabel ?: "not paired"} (${hr.connection})$bpm", color = Color.White, fontSize = 18.sp, modifier = Modifier.weight(1f))
+            Text(hrStatusText(hr), color = Color.White, fontSize = 18.sp, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = actions.onPairHr) { Text("PAIR HR STRAP") }
+        }
+        if (pairing != PairingState.Idle) {
+            HrPairingPanel(pairing, state.hrDeviceLabel, actions.onScanHr, actions.onPickStrap, actions.onForgetHr, actions.onClosePairing)
         }
         Button(onClick = actions.onLaunchLichess) { Text("LAUNCH LICHESS") }
         TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "ADVANCED (hide)" else "ADVANCED") }

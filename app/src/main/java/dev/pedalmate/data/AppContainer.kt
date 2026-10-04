@@ -3,6 +3,7 @@ package dev.pedalmate.data
 import android.content.Context
 import android.util.Log
 import dev.pedalmate.audio.CuePlayer
+import dev.pedalmate.heartrate.HrPairing
 import dev.pedalmate.heartrate.SavedHrDeviceStore
 import dev.pedalmate.PedalMateApp
 import dev.pedalmate.ride.RideFinalizer
@@ -29,6 +30,7 @@ class AppContainer(context: Context) {
         bike = SensorFactory.createBikeSource(appContext, scope),
         hr = SensorFactory.createHeartRateSource(appContext, scope, hrStore),
     )
+    val hrPairing = HrPairing(hub.hr, hrStore)
     val cuePlayer = CuePlayer(scope)
 
     @Volatile private var currentFtp: Int? = null
