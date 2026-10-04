@@ -1,5 +1,6 @@
 package dev.pedalmate.ui.setup
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -118,6 +119,7 @@ class SetupActivity : ComponentActivity() {
 
     private fun refreshPermissions() {
         permissionItems = permissionHelper.items()
+        if (PermissionPlanner.hrScanReady(permissionItems)) vm.dismissMessageIf(PermissionPlanner.HR_SCAN_BLOCKED_MESSAGE)
     }
 
     private fun pairHr() {
@@ -135,7 +137,11 @@ class SetupActivity : ComponentActivity() {
         when (val fix = item.fix) {
             is Fix.OpenScreen -> {
                 val intent = if (item.kind == PermissionKind.OVERLAY) permissionHelper.overlayIntent() else permissionHelper.locationSettingsIntent()
-                startActivity(intent)
+                try {
+                    startActivity(intent)
+                } catch (e: ActivityNotFoundException) {
+                    vm.showMessage(adbCommandFor(item.kind))
+                }
             }
             is Fix.RequestRuntime -> {
                 permissionHelper.markLocationRequested()
@@ -143,6 +149,16 @@ class SetupActivity : ComponentActivity() {
             }
             else -> Unit
         }
+    }
+
+    /** The adb command for a settings screen this firmware cannot open. */
+    private fun adbCommandFor(kind: PermissionKind): String {
+        val unresolvable = if (kind == PermissionKind.OVERLAY) {
+            PermissionPlanner.overlay(false, false, packageName)
+        } else {
+            PermissionPlanner.locationServices(false, false)
+        }
+        return (unresolvable.fix as Fix.ShowAdb).command
     }
 
     private fun launchLichess(pkg: String) {

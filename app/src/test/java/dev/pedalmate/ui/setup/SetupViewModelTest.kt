@@ -215,6 +215,16 @@ class SetupViewModelTest {
     }
 
     @Test
+    fun `dismissMessageIf clears only the matching message`() = runTest {
+        val v = vm()
+        v.showMessage("A")
+        v.dismissMessageIf("B")
+        assertEquals("A", v.state.value.message)
+        v.dismissMessageIf("A")
+        assertNull(v.state.value.message)
+    }
+
+    @Test
     fun `start blocked while a ride runs`() = runTest {
         val v = vm()
         for (st in listOf(RideStatus.RUNNING, RideStatus.PAUSED)) {

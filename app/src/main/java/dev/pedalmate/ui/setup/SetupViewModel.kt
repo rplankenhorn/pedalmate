@@ -161,6 +161,9 @@ class SetupViewModel(
     fun resume() = commands.resume()
     fun skip() = commands.skip()
     fun dismissMessage() = say(null)
+
+    /** Clears the message bar only if it still shows [text] (a hint that has since been resolved). */
+    fun dismissMessageIf(text: String) = local.update { if (it.message == text) it.copy(message = null) else it }
     private fun say(m: String?) = local.update { it.copy(message = m) }
 
     /** Shows [text] in the message bar (used by the Activity for hints such as the overlay adb command). */
