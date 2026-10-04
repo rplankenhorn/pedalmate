@@ -25,6 +25,8 @@ import dev.pedalmate.permissions.PermissionHelper
 import dev.pedalmate.permissions.PermissionItem
 import dev.pedalmate.permissions.PermissionKind
 import dev.pedalmate.permissions.PermissionPlanner
+import dev.pedalmate.ride.RideService
+import dev.pedalmate.ride.RideStatus
 import dev.pedalmate.sensor.SensorFactory
 import dev.pedalmate.ui.debug.CueDebugRow
 import dev.pedalmate.ui.debug.SensorDebugScreen
@@ -115,6 +117,9 @@ class SetupActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         refreshPermissions()
+        // The overlay permission may have just been granted mid-ride: ask the service to show the panel.
+        val status = appContainer.session.snapshot.value.status
+        if (status == RideStatus.RUNNING || status == RideStatus.PAUSED) startService(RideService.refreshOverlayIntent(this))
     }
 
     private fun refreshPermissions() {

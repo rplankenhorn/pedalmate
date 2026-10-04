@@ -11,4 +11,7 @@ object OverlayPolicy {
         visible = status != RideStatus.IDLE,
         keepScreenOn = status == RideStatus.RUNNING,
     )
+
+    /** True when a refresh should call show: the ride wants the panel but it is not on screen. */
+    fun needsShow(status: RideStatus, isShowing: Boolean) = directive(status).visible && !isShowing
 }

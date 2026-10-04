@@ -25,6 +25,7 @@ import dev.pedalmate.overlay.OverlayContent
 import dev.pedalmate.overlay.OverlayController
 import dev.pedalmate.overlay.OverlayPolicy
 import dev.pedalmate.overlay.OverlayPrefs
+import dev.pedalmate.overlay.OverlayPrefsState
 import dev.pedalmate.overlay.OverlayToastWindow
 import dev.pedalmate.overlay.OverlayUiModel
 import dev.pedalmate.overlay.ShowResult
@@ -89,19 +90,32 @@ class RideService : Service() {
                         overlay.hide()
                         return@collect
                     }
-                    val result = overlay.show(
-                        content = {
-                            val model by remember { container.session.snapshot.map { OverlayUiModel.from(it) } }
-                                .collectAsState(initial = OverlayUiModel.from(container.session.snapshot.value))
-                            OverlayContent(model, minimized) { toggleMinimized() }
-                        },
-                        initial = saved.position,
-                        onMoved = { p -> container.scope.launch { prefs.setPosition(p) } },
-                    )
-                    if (result == ShowResult.NO_PERMISSION || result == ShowResult.FAILED) {
-                        Log.w("PedalMate", "overlay not shown: $result")
-                    }
+                    showOverlay(saved)
                 }
+        }
+    }
+
+    private fun showOverlay(saved: OverlayPrefsState) {
+        val result = overlay.show(
+            content = {
+                val model by remember { container.session.snapshot.map { OverlayUiModel.from(it) } }
+                    .collectAsState(initial = OverlayUiModel.from(container.session.snapshot.value))
+                OverlayContent(model, minimized) { toggleMinimized() }
+            },
+            initial = saved.position,
+            onMoved = { p -> container.scope.launch { prefs.setPosition(p) } },
+        )
+        if (result == ShowResult.NO_PERMISSION || result == ShowResult.FAILED) {
+            Log.w("PedalMate", "overlay not shown: $result")
+        }
+    }
+
+    /** The rider may have granted the overlay permission mid-ride: show the panel if it is wanted but missing. */
+    private fun refreshOverlay() {
+        uiScope.launch {
+            if (OverlayPolicy.needsShow(container.session.snapshot.value.status, overlay.isShowing)) {
+                showOverlay(prefs.load())
+            }
         }
     }
 
@@ -117,6 +131,7 @@ class RideService : Service() {
         when (RideServicePolicy.decide(intent?.action, intent == null, session.isActive)) {
             ServiceAction.START -> startRide(intent?.getStringExtra(EXTRA_WORKOUT_ID))
             ServiceAction.CONTINUE -> ensureTicker()
+            ServiceAction.REFRESH_OVERLAY -> { ensureTicker(); refreshOverlay() }
             ServiceAction.STOP, ServiceAction.STOP_SELF -> stopRide()
         }
         return START_STICKY
@@ -191,6 +206,7 @@ class RideService : Service() {
     companion object {
         const val ACTION_START = "dev.pedalmate.action.START_RIDE"
         const val ACTION_STOP = "dev.pedalmate.action.STOP_RIDE"
+        const val ACTION_REFRESH_OVERLAY = "dev.pedalmate.action.REFRESH_OVERLAY"
         const val EXTRA_WORKOUT_ID = "workout_id"
         private const val CHANNEL_ID = "ride"
         private const val NOTIFICATION_ID = 1
@@ -202,6 +218,8 @@ class RideService : Service() {
             if (workoutId != null) i.putExtra(EXTRA_WORKOUT_ID, workoutId)
             ContextCompat.startForegroundService(context, i)
         }
+
+        fun refreshOverlayIntent(context: Context): Intent = Intent(context, RideService::class.java).setAction(ACTION_REFRESH_OVERLAY)
 
         fun stopIntent(context: Context): Intent = Intent(context, RideService::class.java).setAction(ACTION_STOP)
     }

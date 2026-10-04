@@ -17,4 +17,9 @@ class RideServicePolicyTest {
         check("some.other.action", false, true, ServiceAction.CONTINUE)
         check("some.other.action", false, false, ServiceAction.STOP_SELF)
     }
+
+    @Test fun `refresh overlay is explicit and never keeps an idle service alive`() {
+        check(RideService.ACTION_REFRESH_OVERLAY, false, true, ServiceAction.REFRESH_OVERLAY)
+        check(RideService.ACTION_REFRESH_OVERLAY, false, false, ServiceAction.STOP_SELF)
+    }
 }
