@@ -130,10 +130,16 @@ class RideService : Service() {
             .setOngoing(true)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())
             .build()
-        startForeground(
-            NOTIFICATION_ID, n,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-        )
+        val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        try {
+            startForeground(NOTIFICATION_ID, n, types)
+        } catch (e: SecurityException) {
+            Log.w("PedalMate", "typed startForeground denied, falling back to untyped", e)
+            startForeground(NOTIFICATION_ID, n)
+        } catch (e: IllegalArgumentException) {
+            Log.w("PedalMate", "typed startForeground rejected, falling back to untyped", e)
+            startForeground(NOTIFICATION_ID, n)
+        }
     }
 
     private fun startRide(workoutId: String?) {

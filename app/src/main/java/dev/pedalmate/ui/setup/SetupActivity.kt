@@ -1,11 +1,7 @@
 package dev.pedalmate.ui.setup
 
-import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -23,7 +19,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dev.pedalmate.data.appContainer
 import dev.pedalmate.heartrate.HrPairingController
-import dev.pedalmate.heartrate.requiredBlePermissions
+import dev.pedalmate.permissions.Fix
+import dev.pedalmate.permissions.PermissionHelper
+import dev.pedalmate.permissions.PermissionItem
+import dev.pedalmate.permissions.PermissionKind
+import dev.pedalmate.permissions.PermissionPlanner
 import dev.pedalmate.sensor.SensorFactory
 import dev.pedalmate.ui.debug.CueDebugRow
 import dev.pedalmate.ui.debug.SensorDebugScreen
@@ -38,13 +38,13 @@ class SetupActivity : ComponentActivity() {
             applicationContext.packageManager.getLaunchIntentForPackage(pkg) != null
         }
     }
-    private var overlayGranted by mutableStateOf(false)
+    private val permissionHelper by lazy { PermissionHelper(applicationContext) }
+    private var permissionItems by mutableStateOf(emptyList<PermissionItem>())
     private var diagnostics by mutableStateOf(false)
     private val hrPairing by lazy { HrPairingController(SensorFactory.createBleScanner(applicationContext), appContainer.hrPairing, lifecycleScope) }
     private val blePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.all { it }) hrPairing.startScan() else vm.showMessage(
-            "Bluetooth scan needs the Location permission. Run: adb shell pm grant $packageName android.permission.ACCESS_FINE_LOCATION",
-        )
+        refreshPermissions()
+        if (!PermissionPlanner.blePermissionsGranted(result)) vm.showMessage(PermissionPlanner.HR_SCAN_BLOCKED_MESSAGE)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,7 +64,7 @@ class SetupActivity : ComponentActivity() {
             onResume = vm::resume,
             onSkip = vm::skip,
             onLaunchLichess = { lifecycleScope.launch { vm.onLaunchLichessRequested()?.let(::launchLichess) } },
-            onGrantOverlay = ::grantOverlay,
+            onFixPermission = ::fixPermission,
             onPackageChange = vm::onLichessPackageChanged,
             onDismissMessage = vm::dismissMessage,
             onShowDiagnostics = { diagnostics = true },
@@ -94,7 +94,7 @@ class SetupActivity : ComponentActivity() {
                     val bpm by c.hub.hr.bpm.collectAsStateWithLifecycle()
                     val hrState by c.hub.hr.connectionState.collectAsStateWithLifecycle()
                     val pairing by hrPairing.state.collectAsStateWithLifecycle()
-                    SetupScreen(state, HrCardState(state.hrDeviceLabel, hrState, bpm), pairing, overlayGranted, actions)
+                    SetupScreen(state, HrCardState(state.hrDeviceLabel, hrState, bpm), pairing, permissionItems, actions)
                 }
             }
         }
@@ -113,24 +113,39 @@ class SetupActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        overlayGranted = Settings.canDrawOverlays(this)
+        refreshPermissions()
+    }
+
+    private fun refreshPermissions() {
+        permissionItems = permissionHelper.items()
     }
 
     private fun pairHr() {
-        val missing = requiredBlePermissions().filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-        if (missing.isEmpty()) hrPairing.startScan() else blePermissionLauncher.launch(missing.toTypedArray())
+        refreshPermissions()
+        if (PermissionPlanner.hrScanReady(permissionItems)) {
+            hrPairing.startScan()
+            return
+        }
+        // Includes API 29 with the permission granted but system Location off: the scan would return nothing and no error.
+        vm.showMessage(PermissionPlanner.HR_SCAN_BLOCKED_MESSAGE)
+        PermissionPlanner.firstBlockingItem(permissionItems)?.let { if (it.fix is Fix.OpenScreen) fixPermission(it) }
+    }
+
+    private fun fixPermission(item: PermissionItem) {
+        when (val fix = item.fix) {
+            is Fix.OpenScreen -> {
+                val intent = if (item.kind == PermissionKind.OVERLAY) permissionHelper.overlayIntent() else permissionHelper.locationSettingsIntent()
+                startActivity(intent)
+            }
+            is Fix.RequestRuntime -> {
+                permissionHelper.markLocationRequested()
+                blePermissionLauncher.launch(arrayOf(fix.permission))
+            }
+            else -> Unit
+        }
     }
 
     private fun launchLichess(pkg: String) {
         packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-    }
-
-    /** Minimal grant flow; A15 replaces it with PermissionHelper. */
-    private fun grantOverlay() {
-        try {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-        } catch (e: ActivityNotFoundException) {
-            vm.showMessage("Run: adb shell appops set $packageName SYSTEM_ALERT_WINDOW allow")
-        }
     }
 }
