@@ -1,33 +1,8 @@
 // Derived from OpenRide (Apache-2.0), app/src/main/java/dev/digitalducktape/openride/core/heartrate/BlePermissions.kt. Modified by PedalMate.
 package dev.pedalmate.heartrate
 
-import android.Manifest
-import android.os.Build
-
 /**
- * Which runtime permissions are needed to scan for / connect to BLE heart-rate straps
- * (PRD P1-4, T17), split by API level:
- *
- * - Android 12+ (API 31+) introduced the dedicated `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT`
- *   runtime permissions.
- * - Everything before that — including this project's actual target hardware, the Bike Gen 2
- *   tablet on Android 10/API 29 or Android 11/API 30 — needs the legacy `ACCESS_FINE_LOCATION` runtime
- *   permission (BLE scans can reveal location on these API levels); `BLUETOOTH`/
- *   `BLUETOOTH_ADMIN` are also required there but are install-time "normal" permissions
- *   (declared in the manifest with `maxSdkVersion="30"`, never requested at runtime).
- *
- * A plain function of [sdkInt] (not `Build.VERSION.SDK_INT` read directly) so the branch is
- * unit-testable on a plain JVM without Robolectric.
- */
-fun requiredBlePermissions(sdkInt: Int = Build.VERSION.SDK_INT): Array<String> =
-    if (sdkInt >= Build.VERSION_CODES.S) {
-        arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-    } else {
-        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-    }
-
-/**
- * Result of checking/requesting the permissions from [requiredBlePermissions] — drives the
+ * Result of checking/requesting the BLE scan permissions — drives the
  * pairing screen's "clean rationale + graceful degradation" requirement (PRD P1-4, T17)
  * without the screen needing to re-derive this branching itself.
  */
@@ -53,7 +28,7 @@ sealed interface BlePermissionState {
  * the part of the pairing screen's permission handling that's unit-testable without touching
  * real `ContextCompat`/`ActivityCompat` APIs (see `BlePermissionsTest`).
  *
- * @param permissions the permission strings to check, e.g. from [requiredBlePermissions]
+ * @param permissions the permission strings to check, e.g. `ACCESS_FINE_LOCATION` on API 29
  * @param granted this app's current per-permission grant status (post
  *   `ContextCompat.checkSelfPermission`)
  * @param shouldShowRationale Android's per-permission "should show rationale" signal
