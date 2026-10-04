@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -98,16 +97,17 @@ private fun FtpCard(state: SetupUiState, actions: SetupActions) {
     )
     if (state.zoneRows.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            state.zoneRows.chunked(4).forEach { chunk ->
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            state.zoneRows.chunked(3).forEach { chunk ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     chunk.forEach { row ->
-                        Row(Modifier.width(220.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(28.dp).background(zoneColors[row.zone - 1]), contentAlignment = Alignment.Center) {
                                 Text("Z${row.zone}", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                             Text(row.rangeText, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
                         }
                     }
+                    repeat(3 - chunk.size) { Box(Modifier.weight(1f)) }
                 }
             }
         }

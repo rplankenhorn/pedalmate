@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 class SetupActivity : ComponentActivity() {
     private val vm: SetupViewModel by viewModels {
         SetupViewModelFactory(appContainer, ServiceRideCommands(applicationContext, appContainer.session)) { pkg ->
-            packageManager.getLaunchIntentForPackage(pkg) != null
+            applicationContext.packageManager.getLaunchIntentForPackage(pkg) != null
         }
     }
     private var overlayGranted by mutableStateOf(false)
