@@ -26,6 +26,8 @@ const val FREE_RIDE_ID = "@free"
 private const val LICHESS_MISSING =
     "Lichess not found: run adb shell pm list packages | grep lichess and enter the package under Advanced."
 
+private const val OVERLAY_MISSING = "Overlay permission missing: the ride will run without the panel"
+
 /** One row of the zone preview, e.g. zone 5 and `263-299 W`. */
 data class ZoneRow(val zone: Int, val rangeText: String)
 
@@ -70,6 +72,7 @@ class SetupViewModel(
         val selected: String? = null,
         val pkgEdit: String? = null,
         val message: String? = null,
+        val overlayGranted: Boolean = true,   // optimistic until the Activity reports, so no warning flashes
     )
 
     private val local = MutableStateFlow(Local())
@@ -105,7 +108,11 @@ class SetupViewModel(
             lichessPackage = pkgText,
             lichessPackageError = if (l.pkgEdit != null && l.pkgEdit.isBlank()) "Package name required" else null,
             rideStatus = snap.status, canStart = blocked == null, startBlockedReason = blocked,
-            startWarning = if (parse is FtpParse.Empty) "No FTP set: zones and targets will show dashes." else null,
+            startWarning = when {
+                parse is FtpParse.Empty -> "No FTP set: zones and targets will show dashes."
+                !l.overlayGranted -> OVERLAY_MISSING
+                else -> null
+            },
             hrDeviceLabel = hrLabel, message = l.message,
         )
     }
@@ -161,6 +168,9 @@ class SetupViewModel(
     fun resume() = commands.resume()
     fun skip() = commands.skip()
     fun dismissMessage() = say(null)
+
+    /** The Activity reports the overlay permission (plain Boolean; the ViewModel never holds the Activity). */
+    fun onOverlayPermissionChanged(granted: Boolean) = local.update { it.copy(overlayGranted = granted) }
 
     /** Clears the message bar only if it still shows [text] (a hint that has since been resolved). */
     fun dismissMessageIf(text: String) = local.update { if (it.message == text) it.copy(message = null) else it }

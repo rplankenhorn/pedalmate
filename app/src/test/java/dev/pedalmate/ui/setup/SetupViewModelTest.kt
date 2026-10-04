@@ -119,6 +119,25 @@ class SetupViewModelTest {
     }
 
     @Test
+    fun `missing overlay permission warns but does not block start`() = runTest {
+        settings.setFtp(250)
+        val v = vm()
+        assertNull(v.state.value.startWarning)
+        v.onOverlayPermissionChanged(false)
+        assertEquals("Overlay permission missing: the ride will run without the panel", v.state.value.startWarning)
+        assertTrue(v.state.value.canStart)
+        v.onOverlayPermissionChanged(true)
+        assertNull(v.state.value.startWarning)
+    }
+
+    @Test
+    fun `missing FTP warning takes precedence over missing overlay`() = runTest {
+        val v = vm()
+        v.onOverlayPermissionChanged(false)
+        assertEquals("No FTP set: zones and targets will show dashes.", v.state.value.startWarning)
+    }
+
+    @Test
     fun `typing through intermediate values`() = runTest {
         val v = vm()
         v.onFtpTextChanged("6")

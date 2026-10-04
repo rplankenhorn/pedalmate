@@ -119,6 +119,7 @@ class SetupActivity : ComponentActivity() {
 
     private fun refreshPermissions() {
         permissionItems = permissionHelper.items()
+        vm.onOverlayPermissionChanged(PermissionPlanner.overlayReady(permissionItems))
         if (PermissionPlanner.hrScanReady(permissionItems)) vm.dismissMessageIf(PermissionPlanner.HR_SCAN_BLOCKED_MESSAGE)
     }
 
