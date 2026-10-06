@@ -25,6 +25,7 @@ android {
         create("mock") {
             dimension = "sensor"
             applicationIdSuffix = ".mock"
+            resValue("string", "app_name", "PedalMate (mock)")
         }
         create("real") {
             dimension = "sensor"
