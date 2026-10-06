@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,28 +18,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.pedalmate.workout.PowerZone
-import dev.pedalmate.workout.TargetStatus
 
-private val PanelBackground = Color(0xCC000000)
-private val WarnRed = Color(0xFFEF5350)
+private val PanelBackground = Color(0xD1000000)
+private val IntervalYellow = Color(0xFFF5C232)
+private val LabelGrey = Color(0xFF9B9B9B)
+private val AvgBestGrey = Color(0xFF8F8F8F)
+private val Divider = Color(0x33FFFFFF)
 
-private fun zoneColor(z: PowerZone?): Color = when (z?.number) {
-    1 -> Color(0xFF9E9E9E); 2 -> Color(0xFF2196F3); 3 -> Color(0xFF4CAF50); 4 -> Color(0xFFFFC107)
-    5 -> Color(0xFFFF9800); 6 -> Color(0xFFF44336); 7 -> Color(0xFF9C27B0); else -> Color(0xFF616161)
-}
-
-private fun statusColor(s: TargetStatus?): Color = when (s) {
-    TargetStatus.BELOW -> Color(0xFF42A5F5)
-    TargetStatus.IN -> Color(0xFF66BB6A)
-    TargetStatus.ABOVE -> WarnRed
-    null -> Color.White
-}
-
-/** Ride overlay: an expanded column, or a one-line pill when [minimized]. Tapping toggles via [onToggle]. */
+/** Ride overlay: an expanded Peloton-style panel, or a one-line pill when [minimized]. Tapping toggles via [onToggle]. */
 @Composable
 fun OverlayContent(model: OverlayUiModel, minimized: Boolean, onToggle: () -> Unit) {
     if (minimized) Pill(model, onToggle) else Panel(model, onToggle)
@@ -47,37 +42,101 @@ fun OverlayContent(model: OverlayUiModel, minimized: Boolean, onToggle: () -> Un
 @Composable
 private fun Panel(model: OverlayUiModel, onToggle: () -> Unit) {
     Column(
-        Modifier.width(240.dp)
-            .background(PanelBackground, RoundedCornerShape(12.dp))
+        Modifier.width(640.dp)
+            .background(PanelBackground, RoundedCornerShape(14.dp))
             .clickable(onClick = onToggle)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (model.banner != null) Text(model.banner, color = WarnRed, fontWeight = FontWeight.Bold)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.background(zoneColor(model.zone), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                Text(model.zoneChip, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            }
-            Text(model.wattsText, color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
-            Text("W", color = Color.White, fontSize = 14.sp)
+        IntervalStrip(model)
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Divider))
+        if (model.banner != null) {
+            Text(model.banner, color = ZoneColors.Above, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
-        if (model.targetText != null) {
-            Text("Target ${model.targetText}", color = Color.White, fontSize = 16.sp)
-        }
-        if (model.statusText != null) {
-            val color = if (model.paused) Color(0xFFFFC107) else statusColor(model.targetStatus)
-            Text(model.statusText, color = color, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
-        Text(model.intervalName, color = Color.White, fontSize = 20.sp)
-        if (model.intervalTime != null) Text(model.intervalTime, color = Color.White, fontSize = 36.sp)
-        if (model.nextText != null) Text(model.nextText, color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("HR ${model.hrText}", color = Color.White, fontSize = 14.sp)
-            Text("RPM ${model.cadenceText}", color = Color.White, fontSize = 14.sp)
-            Text("RES ${model.resistanceText}", color = Color.White, fontSize = 14.sp)
-        }
-        if (model.needsFtp) Text("Set FTP in PedalMate", color = Color(0xFFFFC107), fontSize = 12.sp)
+        OutputRow(model)
+        ZoneRow(model)
+        BottomRow(model)
+        if (model.needsFtp) Text("Set FTP in PedalMate", color = IntervalYellow, fontSize = 12.sp)
     }
+}
+
+@Composable
+private fun IntervalStrip(model: OverlayUiModel) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(model.intervalName, color = IntervalYellow, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        if (model.intervalTime != null) {
+            Text(model.intervalTime, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Light)
+        }
+        if (model.nextText != null) Text(model.nextText, color = LabelGrey, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun OutputRow(model: OverlayUiModel) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("OUTPUT (WATTS)", color = LabelGrey, fontSize = 12.sp, letterSpacing = 0.12.em)
+        Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("AVG", color = LabelGrey, fontSize = 11.sp, letterSpacing = 0.12.em)
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = ZoneColors.of(PowerZone.Z3), fontSize = 10.sp)) { append("\u25B2 ") }
+                        append(model.avgWattsText)
+                    },
+                    color = AvgBestGrey, fontSize = 22.sp, fontWeight = FontWeight.Light,
+                )
+            }
+            Text(model.wattsText, color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Light)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("BEST", color = LabelGrey, fontSize = 11.sp, letterSpacing = 0.12.em)
+                Text(model.bestWattsText, color = AvgBestGrey, fontSize = 22.sp, fontWeight = FontWeight.Light)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoneRow(model: OverlayUiModel) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column {
+            Text("ZONE", color = LabelGrey, fontSize = 11.sp, letterSpacing = 0.12.em)
+            Text(model.zoneNumberText, color = ZoneColors.of(model.zone), fontSize = 40.sp, fontWeight = FontWeight.Light)
+            if (model.statusText != null) {
+                val color = if (model.paused) ZoneColors.Paused else ZoneColors.status(model.targetStatus)
+                Text(model.statusText, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        PelotonZoneBar(
+            current = model.zone, target = model.targetZone, labels = model.zoneBoundaryLabels,
+            modifier = Modifier.weight(1f),
+        )
+        Column {
+            Text("FTP %", color = LabelGrey, fontSize = 11.sp, letterSpacing = 0.12.em)
+            Text(model.ftpPercentText, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
+        }
+    }
+}
+
+@Composable
+private fun BottomRow(model: OverlayUiModel) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Metric("CADENCE", model.cadenceText, " rpm")
+        Metric("RESISTANCE", model.resistanceText, "")
+        Metric("HR", model.hrText, " bpm")
+    }
+}
+
+@Composable
+private fun Metric(label: String, value: String, unit: String) {
+    Text(
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = LabelGrey, letterSpacing = 0.1.em)) { append(label) }
+            append("  ")
+            withStyle(SpanStyle(color = Color.White)) { append(value) }
+            withStyle(SpanStyle(color = LabelGrey)) { append(unit) }
+        },
+        fontSize = 13.sp,
+    )
 }
 
 @Composable
@@ -89,12 +148,12 @@ private fun Pill(model: OverlayUiModel, onToggle: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(Modifier.size(14.dp).background(zoneColor(model.zone), CircleShape))
+        Box(Modifier.size(14.dp).background(ZoneColors.of(model.zone), CircleShape))
         Text(
             model.pillText,
-            color = if (model.banner != null) WarnRed else Color.White,
+            color = if (model.banner != null) ZoneColors.Above else Color.White,
             fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Light,
         )
     }
 }
