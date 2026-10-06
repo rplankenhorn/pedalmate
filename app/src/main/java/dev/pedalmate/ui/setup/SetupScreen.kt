@@ -36,9 +36,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.pedalmate.heartrate.BleDevice
 import dev.pedalmate.heartrate.PairingState
+import dev.pedalmate.overlay.ZoneColors
 import dev.pedalmate.permissions.PermissionItem
 import dev.pedalmate.ride.RideStatus
 import dev.pedalmate.sensor.ConnectionState
+import dev.pedalmate.workout.PowerZone
 
 /** Heart-rate strap status shown on the setup screen. */
 data class HrCardState(val deviceLabel: String?, val connection: ConnectionState, val bpm: Int?)
@@ -65,10 +67,6 @@ data class SetupActions(
 )
 
 private val amber = Color(0xFFFFB300)
-private val zoneColors = listOf(
-    Color(0xFF9E9E9E), Color(0xFF42A5F5), Color(0xFF66BB6A), Color(0xFFFDD835),
-    Color(0xFFFB8C00), Color(0xFFE53935), Color(0xFFAB47BC),
-)
 
 /** The launcher screen: FTP, workout picker, ride controls, permissions and sensors. Landscape, two columns, inline only. */
 @Composable
@@ -108,7 +106,7 @@ private fun FtpCard(state: SetupUiState, actions: SetupActions) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     chunk.forEach { row ->
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(28.dp).background(zoneColors[row.zone - 1]), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(28.dp).background(ZoneColors.of(PowerZone.values().getOrNull(row.zone - 1))), contentAlignment = Alignment.Center) {
                                 Text("Z${row.zone}", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                             Text(row.rangeText, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
