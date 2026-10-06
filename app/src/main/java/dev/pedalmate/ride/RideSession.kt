@@ -212,9 +212,11 @@ class RideSession(
         val range = step?.wattRange
         val targetStatus = if (nowMs != null) tracker.update(nowMs, smoothed, range) else null
         val hrState = hub.hr.connectionState.value
+        val aggregates = rideLog.live()
         return RideSnapshot(
             status = status, workoutName = workoutName, bikeState = bikeState, hrState = hrState,
             powerWatts = power, smoothedPowerWatts = smoothed,
+            avgPowerWatts = aggregates?.avgPowerWatts, maxPowerWatts = aggregates?.maxPowerWatts,
             cadenceRpm = if (live) m.cadenceRpm else null,
             resistancePercent = if (live) m.resistancePercent else null,
             heartRateBpm = if (hrState == ConnectionState.Connected) hub.hr.bpm.value else null,

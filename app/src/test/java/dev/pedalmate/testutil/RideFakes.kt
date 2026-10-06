@@ -4,6 +4,7 @@ import dev.pedalmate.audio.Cue
 import dev.pedalmate.audio.CueSink
 import dev.pedalmate.heartrate.ManagedHeartRateDataSource
 import dev.pedalmate.ride.LiveAggregates
+import dev.pedalmate.ride.LiveAggregator
 import dev.pedalmate.ride.RideFrame
 import dev.pedalmate.ride.RideLog
 import dev.pedalmate.sensor.BikeMetrics
@@ -48,6 +49,10 @@ class RecordingLog : RideLog {
     }
     override fun offer(frame: RideFrame) { frames += frame }
     override suspend fun finish(): LiveAggregates? { finishes++; return null }
+    override fun live(): LiveAggregates? {
+        if (begins.isEmpty() || finishes > 0) return null
+        return LiveAggregator().also { agg -> frames.forEach(agg::add) }.snapshot()
+    }
 }
 
 class RecordingCues : CueSink {

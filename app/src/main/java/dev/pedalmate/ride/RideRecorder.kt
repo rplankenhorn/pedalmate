@@ -18,6 +18,8 @@ interface RideLog {
     suspend fun begin(workoutId: String?, ftp: Int?): Long
     fun offer(frame: RideFrame)
     suspend fun finish(): LiveAggregates?
+    /** Aggregates of the ride in progress; null when no ride is recording. */
+    fun live(): LiveAggregates?
 }
 
 /** Records one sample per ride-second, flushing batches to the database every [flushPeriodMs]. */
@@ -71,6 +73,8 @@ class RideRecorder(
             synchronized(lock) { buffer.addAll(0, batch) }
         }
     }
+
+    override fun live(): LiveAggregates? = synchronized(lock) { if (rideId == null) null else aggregator.snapshot() }
 
     override suspend fun finish(): LiveAggregates? {
         val id = synchronized(lock) { rideId } ?: return null

@@ -63,6 +63,18 @@ class RideSessionTest {
         assertEquals(4_000L, snap.workout!!.stepElapsedMs); assertEquals(4_000L, snap.elapsedMs)
     }
 
+    @Test fun `snapshot carries live average and max power from the ride log`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession()
+        assertNull(s.snapshot.value.avgPowerWatts); assertNull(s.snapshot.value.maxPowerWatts)
+        s.startWorkout("t")
+        bike.set(power = 100); s.tick(0)
+        bike.set(power = 200); s.tick(250)
+        s.tick(500)
+        assertEquals(150, s.snapshot.value.avgPowerWatts); assertEquals(200, s.snapshot.value.maxPowerWatts)
+        s.stop()
+        assertNull(s.snapshot.value.avgPowerWatts); assertNull(s.snapshot.value.maxPowerWatts)
+    }
+
     @Test fun `power below the target range reports BELOW and the lower zone`() = runTest(UnconfinedTestDispatcher()) {
         val s = newSession(); s.startWorkout("t"); bike.set(power = 100)
         s.run(0, 8_000)

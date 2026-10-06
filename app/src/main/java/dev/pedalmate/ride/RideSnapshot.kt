@@ -20,6 +20,8 @@ data class RideSnapshot(
     val hrState: ConnectionState,
     val powerWatts: Int?,
     val smoothedPowerWatts: Int?,
+    val avgPowerWatts: Int?,
+    val maxPowerWatts: Int?,
     val cadenceRpm: Int?,
     val resistancePercent: Int?,
     val heartRateBpm: Int?,
@@ -34,7 +36,7 @@ data class RideSnapshot(
     companion object {
         fun idle(ftp: Int? = null) = RideSnapshot(
             RideStatus.IDLE, null, ConnectionState.Unavailable, ConnectionState.Unavailable,
-            null, null, null, null, null, ftp, null, null, null, null, null, 0L,
+            null, null, null, null, null, null, null, ftp, null, null, null, null, null, 0L,
         )
     }
 }
