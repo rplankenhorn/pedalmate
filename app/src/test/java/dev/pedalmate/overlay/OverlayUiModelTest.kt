@@ -48,9 +48,39 @@ class OverlayUiModelTest {
         assertEquals("151", m.hrText)
         assertEquals("92", m.cadenceText)
         assertEquals("41%", m.resistanceText)
-        assertEquals(0.5f, m.progress)
         assertEquals(false, m.needsFtp)
-        assertEquals("Z5  281 W", m.pillText)
+        assertEquals("Z5 \u00B7 281 W", m.pillText)
+    }
+
+    @Test fun peloton_fields_for_live_workout() {
+        val m = OverlayUiModel.from(live().copy(avgPowerWatts = 240, maxPowerWatts = 312))
+        assertEquals("240", m.avgWattsText)
+        assertEquals("312", m.bestWattsText)
+        assertEquals("112", m.ftpPercentText)   // 281 * 100 / 250 = 112.4
+        assertEquals("5", m.zoneNumberText)
+        assertEquals(PowerZone.Z5, m.targetZone)
+        assertEquals(listOf("0", "138", "188", "225", "263", "300", "375"), m.zoneBoundaryLabels)
+    }
+
+    @Test fun boundary_labels_for_ftp_200() {
+        val m = OverlayUiModel.from(live().copy(ftp = 200))
+        assertEquals(listOf("0", "110", "150", "180", "210", "240", "300"), m.zoneBoundaryLabels)
+    }
+
+    @Test fun peloton_fields_dash_when_unknown() {
+        val m = OverlayUiModel.from(live().copy(avgPowerWatts = null, maxPowerWatts = null, ftp = null, currentZone = null, targetRange = null))
+        assertEquals("--", m.avgWattsText)
+        assertEquals("--", m.bestWattsText)
+        assertEquals("--", m.ftpPercentText)
+        assertEquals("--", m.zoneNumberText)
+        assertTrue(m.zoneBoundaryLabels.isEmpty())
+        assertEquals("--", OverlayUiModel.from(live().copy(smoothedPowerWatts = null)).ftpPercentText)
+    }
+
+    @Test fun target_zone_falls_back_to_range_zone() {
+        val m = OverlayUiModel.from(live().copy(targetZone = null))
+        assertEquals(PowerZone.Z5, m.targetZone)
+        assertNull(OverlayUiModel.from(live().copy(targetZone = null, targetRange = null)).targetZone)
     }
 
     @Test fun statusTexts() {
@@ -100,13 +130,13 @@ class OverlayUiModelTest {
         assertEquals("183", m.wattsText)
         assertEquals("Z2", m.targetText)
         assertTrue(m.needsFtp)
-        assertEquals("--  183 W", m.pillText)
+        assertEquals("-- \u00B7 183 W", m.pillText)
     }
 
     @Test fun connectedNoReading() {
         val m = OverlayUiModel.from(live().copy(smoothedPowerWatts = null, currentZone = null))
         assertEquals("--", m.wattsText)
-        assertEquals("--  --", m.pillText)
+        assertEquals("-- \u00B7 --", m.pillText)
     }
 
     @Test fun intervalNames() {

@@ -5,6 +5,7 @@ import dev.pedalmate.ride.RideStatus
 import dev.pedalmate.sensor.ConnectionState
 import dev.pedalmate.workout.PowerZone
 import dev.pedalmate.workout.TargetStatus
+import dev.pedalmate.workout.ZoneTable
 
 private const val NO_SENSOR = "NO SENSOR"
 
@@ -24,11 +25,25 @@ data class OverlayUiModel(
     val hrText: String,
     val cadenceText: String,
     val resistanceText: String,
-    val progress: Float,
+    val avgWattsText: String,
+    val bestWattsText: String,
+    val ftpPercentText: String,
+    val zoneBoundaryLabels: List<String>,
+    val targetZone: PowerZone?,
+    val zoneNumberText: String,
     val needsFtp: Boolean,
     val pillText: String,
 ) {
     companion object {
+        private fun ftpPercentText(watts: Int?, ftp: Int?): String =
+            if (watts == null || ftp == null || ftp <= 0) "--" else Math.round(watts * 100.0 / ftp).toString()
+
+        /** Lower watt edge of each of the 7 zones; Z1 starts at 0. Empty without a valid FTP. */
+        private fun zoneBoundaryLabels(ftp: Int?): List<String> {
+            val table = ZoneTable.forFtp(ftp) ?: return emptyList()
+            return PowerZone.values().map { if (it.number == 1) "0" else table.rangeOf(it).lowWatts.toString() }
+        }
+
         fun from(s: RideSnapshot): OverlayUiModel {
             val bikeLive = s.bikeState == ConnectionState.Connected
             val zoneChip = s.currentZone?.let { "Z${it.number}" } ?: "--"
@@ -59,8 +74,8 @@ data class OverlayUiModel(
             }
             val pillText = when {
                 !bikeLive -> NO_SENSOR
-                wattsText == "--" -> "$zoneChip  --"
-                else -> "$zoneChip  $wattsText W"
+                wattsText == "--" -> "$zoneChip \u00B7 --"
+                else -> "$zoneChip \u00B7 $wattsText W"
             }
             return OverlayUiModel(
                 zoneChip = zoneChip,
@@ -86,7 +101,12 @@ data class OverlayUiModel(
                 hrText = s.heartRateBpm?.toString() ?: "--",
                 cadenceText = s.cadenceRpm?.toString() ?: "--",
                 resistanceText = s.resistancePercent?.let { "$it%" } ?: "--",
-                progress = w?.progress ?: 0f,
+                avgWattsText = s.avgPowerWatts?.toString() ?: "--",
+                bestWattsText = s.maxPowerWatts?.toString() ?: "--",
+                ftpPercentText = ftpPercentText(s.smoothedPowerWatts, s.ftp),
+                zoneBoundaryLabels = zoneBoundaryLabels(s.ftp),
+                targetZone = s.targetZone ?: s.targetRange?.zone,
+                zoneNumberText = s.currentZone?.number?.toString() ?: "--",
                 needsFtp = s.ftp == null,
                 pillText = pillText,
             )

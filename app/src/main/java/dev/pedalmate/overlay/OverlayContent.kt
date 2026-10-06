@@ -6,9 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -79,9 +77,6 @@ private fun Panel(model: OverlayUiModel, onToggle: () -> Unit) {
             Text("RES ${model.resistanceText}", color = Color.White, fontSize = 14.sp)
         }
         if (model.needsFtp) Text("Set FTP in PedalMate", color = Color(0xFFFFC107), fontSize = 12.sp)
-        Box(Modifier.fillMaxWidth().height(6.dp).background(Color(0x33FFFFFF))) {
-            Box(Modifier.fillMaxWidth(model.progress.coerceIn(0f, 1f)).fillMaxHeight().background(Color.White))
-        }
     }
 }
 
