@@ -17,3 +17,4 @@ captures/
 *.aab
 *.keystore
 .kotlin/
+.lavish/
