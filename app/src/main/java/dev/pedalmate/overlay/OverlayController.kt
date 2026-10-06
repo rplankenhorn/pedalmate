@@ -23,7 +23,7 @@ class OverlayController(
     private var onMoved: (OverlayPlacement) -> Unit = {}
     private var initial: OverlayPlacement? = null
     private var placed = false // true after the first layout decided the position
-        private var viewW = 0
+    private var viewW = 0
     private var viewH = 0
     val isShowing: Boolean get() = window.isShowing
 
