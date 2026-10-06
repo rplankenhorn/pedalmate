@@ -5,7 +5,6 @@ data class OverlayPosition(val x: Int, val y: Int)
 /** Pure placement maths for the overlay window (pixels, top-left origin). */
 object OverlayGeometry {
     const val SNAP_THRESHOLD_PX = 48
-    const val DEFAULT_TOP_MARGIN_PX = 80
 
     private fun maxCoord(screen: Int, view: Int) = maxOf(0, screen - view)
 
@@ -25,8 +24,9 @@ object OverlayGeometry {
         return OverlayPosition(snapped, pos.y)
     }
 
-    fun defaultPosition(viewW: Int, screenW: Int, topMarginPx: Int = DEFAULT_TOP_MARGIN_PX) =
-        OverlayPosition(maxCoord(screenW, viewW), topMarginPx)
+    /** Right-docked and vertically centered, between the bike's top and bottom clocks. */
+    fun defaultPosition(viewW: Int, viewH: Int, screenW: Int, screenH: Int) =
+        OverlayPosition(maxCoord(screenW, viewW), maxCoord(screenH, viewH) / 2)
 
     fun reanchor(prev: OverlayPosition, prevW: Int, newW: Int, screenW: Int): OverlayPosition {
         val prevMax = maxCoord(screenW, prevW)

@@ -138,12 +138,12 @@ class OverlayControllerTest {
     }
 
     @Test
-    fun firstLayoutWithoutSavedPositionDocksRight() {
+    fun firstLayoutWithoutSavedPositionDocksRightAndCenters() {
         controller.show(content, null) {}
         fake.added[0].view.layout(0, 0, 240, 300)
         val p = fake.updates.last().second
         assertEquals(1680, p.x)
-        assertEquals(80, p.y)
+        assertEquals(390, p.y)
     }
 
     @Test

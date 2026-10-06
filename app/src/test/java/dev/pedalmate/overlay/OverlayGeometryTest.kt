@@ -33,9 +33,10 @@ class OverlayGeometryTest {
     @Test fun snapTieLeftWins() = assertEquals(0, snap(30, w = 40, screen = 100).x)
     @Test fun snapViewWiderThanScreen() = assertEquals(0, snap(500, w = 2000).x)
 
-    @Test fun defaultDocksRight() = assertEquals(OverlayPosition(1680, 80), OverlayGeometry.defaultPosition(240, 1920))
-    @Test fun defaultCustomMargin() = assertEquals(OverlayPosition(1680, 10), OverlayGeometry.defaultPosition(240, 1920, topMarginPx = 10))
-    @Test fun defaultWiderThanScreen() = assertEquals(OverlayPosition(0, 80), OverlayGeometry.defaultPosition(2000, 1920))
+    @Test fun defaultDocksRightAndCentersVertically() =
+        assertEquals(OverlayPosition(1280, 390), OverlayGeometry.defaultPosition(640, 300, 1920, 1080))
+    @Test fun defaultLargerThanScreenClampsToOrigin() =
+        assertEquals(OverlayPosition(0, 0), OverlayGeometry.defaultPosition(2000, 1200, 1920, 1080))
 
     private fun re(x: Int, y: Int, prevW: Int, newW: Int) =
         OverlayGeometry.reanchor(OverlayPosition(x, y), prevW, newW, sw)

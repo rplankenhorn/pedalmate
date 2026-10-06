@@ -43,7 +43,7 @@ class OverlayController(
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = initial?.x ?: screenSize().first // WindowManager clamps; the first layout corrects it
-            y = initial?.y ?: OverlayGeometry.DEFAULT_TOP_MARGIN_PX
+            y = initial?.y ?: screenSize().second / 2 // placeholder; the first layout centers it
         }
         val host = ComposeOverlayHost(context, ::dragBy, ::dragEnded, content)
         host.root.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, _, oldRight, _ ->
@@ -84,7 +84,7 @@ class OverlayController(
                 if (hasInitial) {
                     OverlayGeometry.clampToScreen(OverlayPosition(p.x, p.y), w, h, sw, sh)
                 } else {
-                    OverlayGeometry.defaultPosition(w, sw)
+                    OverlayGeometry.defaultPosition(w, h, sw, sh)
                 }
             }
             prevW > 0 && prevW != w -> OverlayGeometry.clampToScreen(
