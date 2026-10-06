@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import dev.pedalmate.workout.PowerZone
 
 private val PanelBackground = Color(0xD1000000)
-private val IntervalYellow = Color(0xFFF5C232)
+private val IntervalYellow = ZoneColors.Paused
 private val LabelGrey = Color(0xFF9B9B9B)
 private val AvgBestGrey = Color(0xFF8F8F8F)
 private val Divider = Color(0x33FFFFFF)

@@ -106,7 +106,7 @@ private fun FtpCard(state: SetupUiState, actions: SetupActions) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     chunk.forEach { row ->
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(28.dp).background(ZoneColors.of(PowerZone.values().getOrNull(row.zone - 1))), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(28.dp).background(ZoneColors.of(PowerZone.fromNumber(row.zone))), contentAlignment = Alignment.Center) {
                                 Text("Z${row.zone}", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                             Text(row.rangeText, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))

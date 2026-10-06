@@ -22,7 +22,7 @@ import dev.pedalmate.workout.PowerZone
 private const val SEGMENTS = 7
 private val EndRadius = 6.dp
 private val Gap = 3.dp
-private val LabelGrey = Color(0xFFCFCFCF)
+private val BoundaryLabelGrey = Color(0xFFCFCFCF)
 
 /** Rounded on the outer edge of the first and last segment, square elsewhere. */
 internal fun segmentShape(index: Int): RoundedCornerShape = RoundedCornerShape(
@@ -60,7 +60,7 @@ fun PelotonZoneBar(current: PowerZone?, target: PowerZone?, labels: List<String>
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Gap)) {
                 for (i in 0 until SEGMENTS) {
                     Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                        Text(labels.getOrElse(i) { "" }, color = LabelGrey, fontSize = 12.sp, softWrap = false)
+                        Text(labels.getOrElse(i) { "" }, color = BoundaryLabelGrey, fontSize = 12.sp, softWrap = false)
                     }
                 }
             }

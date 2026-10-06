@@ -212,6 +212,7 @@ class RideSession(
         val range = step?.wattRange
         val targetStatus = if (nowMs != null) tracker.update(nowMs, smoothed, range) else null
         val hrState = hub.hr.connectionState.value
+        // avg/max reflect frames recorded up to the previous tick (one-tick lag by design: offer() runs after this).
         val aggregates = rideLog.live()
         return RideSnapshot(
             status = status, workoutName = workoutName, bikeState = bikeState, hrState = hrState,

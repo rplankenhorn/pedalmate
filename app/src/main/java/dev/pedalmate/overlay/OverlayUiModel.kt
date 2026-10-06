@@ -6,6 +6,7 @@ import dev.pedalmate.sensor.ConnectionState
 import dev.pedalmate.workout.PowerZone
 import dev.pedalmate.workout.TargetStatus
 import dev.pedalmate.workout.ZoneTable
+import kotlin.math.roundToInt
 
 private const val NO_SENSOR = "NO SENSOR"
 
@@ -36,7 +37,7 @@ data class OverlayUiModel(
 ) {
     companion object {
         private fun ftpPercentText(watts: Int?, ftp: Int?): String =
-            if (watts == null || ftp == null || ftp <= 0) "--" else Math.round(watts * 100.0 / ftp).toString()
+            if (watts == null || ftp == null || ftp <= 0) "--" else (watts * 100.0 / ftp).roundToInt().toString()
 
         /** Lower watt edge of each of the 7 zones; Z1 starts at 0. Empty without a valid FTP. */
         private fun zoneBoundaryLabels(ftp: Int?): List<String> {
