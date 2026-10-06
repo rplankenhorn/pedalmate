@@ -15,9 +15,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -36,7 +39,10 @@ private val Divider = Color(0x33FFFFFF)
 /** Ride overlay: an expanded Peloton-style panel, or a one-line pill when [minimized]. Tapping toggles via [onToggle]. */
 @Composable
 fun OverlayContent(model: OverlayUiModel, minimized: Boolean, onToggle: () -> Unit) {
-    if (minimized) Pill(model, onToggle) else Panel(model, onToggle)
+    val base = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides remember(base) { base.scaledForOverlay() }) {
+        if (minimized) Pill(model, onToggle) else Panel(model, onToggle)
+    }
 }
 
 @Composable
