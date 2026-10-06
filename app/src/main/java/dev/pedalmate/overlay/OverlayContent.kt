@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.pedalmate.workout.PowerZone
+
+/** Minimum pill size in overlay dp (the controller treats this as the practical touch-target floor). */
+internal val PillMinTouchTarget = 48.dp
 
 private val PanelBackground = Color(0xD1000000)
 private val IntervalYellow = ZoneColors.Paused
@@ -148,7 +152,9 @@ private fun Metric(label: String, value: String, unit: String) {
 @Composable
 private fun Pill(model: OverlayUiModel, onToggle: () -> Unit) {
     Row(
-        Modifier.background(PanelBackground, RoundedCornerShape(20.dp))
+        // min size first: background and clickable then both span it, so the whole pill is the hit area
+        Modifier.defaultMinSize(minWidth = PillMinTouchTarget, minHeight = PillMinTouchTarget)
+            .background(PanelBackground, RoundedCornerShape(20.dp))
             .clickable(onClick = onToggle)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
