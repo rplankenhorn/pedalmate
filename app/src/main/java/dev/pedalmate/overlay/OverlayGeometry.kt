@@ -2,6 +2,9 @@ package dev.pedalmate.overlay
 
 data class OverlayPosition(val x: Int, val y: Int)
 
+/** A position plus the view size it was recorded at, so a later layout of a different size can re-dock it. */
+data class OverlayPlacement(val position: OverlayPosition, val viewW: Int, val viewH: Int)
+
 /** Pure placement maths for the overlay window (pixels, top-left origin). */
 object OverlayGeometry {
     const val SNAP_THRESHOLD_PX = 48

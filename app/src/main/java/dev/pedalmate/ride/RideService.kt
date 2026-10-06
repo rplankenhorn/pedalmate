@@ -102,8 +102,8 @@ class RideService : Service() {
                     .collectAsState(initial = OverlayUiModel.from(container.session.snapshot.value))
                 OverlayContent(model, minimized) { toggleMinimized() }
             },
-            initial = saved.position,
-            onMoved = { p -> container.scope.launch { prefs.setPosition(p) } },
+            initial = saved.placement,
+            onMoved = { p -> container.scope.launch { prefs.setPlacement(p) } },
         )
         if (result == ShowResult.NO_PERMISSION || result == ShowResult.FAILED) {
             Log.w("PedalMate", "overlay not shown: $result")

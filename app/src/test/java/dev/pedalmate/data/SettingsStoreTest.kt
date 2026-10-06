@@ -38,7 +38,7 @@ class SettingsStoreTest {
         val s = now()
         assertNull(s.ftp); assertNull(s.lastWorkoutId)
         assertEquals("org.lichess.mobileV2", s.lichessPackage)
-        assertFalse(s.overlayMinimized); assertNull(s.overlayX); assertNull(s.overlayY)
+        assertFalse(s.overlayMinimized); assertNull(s.overlayX); assertNull(s.overlayY); assertNull(s.overlayW); assertNull(s.overlayH)
         assertNull(s.hrAddress); assertNull(s.hrName)
     }
 
@@ -69,8 +69,9 @@ class SettingsStoreTest {
 
     @Test fun `overlay minimized and position`() = runBlocking {
         store.setOverlayMinimized(true); assertTrue(now().overlayMinimized)
-        store.setOverlayPosition(100, 200)
+        store.setOverlayPosition(100, 200, 557, 360)
         assertEquals(100, now().overlayX); assertEquals(200, now().overlayY)
+        assertEquals(557, now().overlayW); assertEquals(360, now().overlayH)
     }
 
     @Test fun `hr device set and clear`() = runBlocking {

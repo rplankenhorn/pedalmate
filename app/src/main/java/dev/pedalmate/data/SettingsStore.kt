@@ -24,6 +24,8 @@ data class Settings(
     val overlayMinimized: Boolean,
     val overlayX: Int?,
     val overlayY: Int?,
+    val overlayW: Int?,
+    val overlayH: Int?,
     val hrAddress: String?,
     val hrName: String?,
 )
@@ -34,6 +36,8 @@ private val LICHESS_PKG = stringPreferencesKey("lichessPackage")
 private val OVERLAY_MIN = booleanPreferencesKey("overlayMinimized")
 private val OVERLAY_X = intPreferencesKey("overlayX")
 private val OVERLAY_Y = intPreferencesKey("overlayY")
+private val OVERLAY_W = intPreferencesKey("overlayW")
+private val OVERLAY_H = intPreferencesKey("overlayH")
 private val HR_ADDRESS = stringPreferencesKey("hrAddress")
 private val HR_NAME = stringPreferencesKey("hrName")
 
@@ -49,6 +53,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
                 overlayMinimized = p[OVERLAY_MIN] ?: false,
                 overlayX = p[OVERLAY_X],
                 overlayY = p[OVERLAY_Y],
+                overlayW = p[OVERLAY_W],
+                overlayH = p[OVERLAY_H],
                 hrAddress = p[HR_ADDRESS],
                 hrName = p[HR_NAME],
             )
@@ -72,8 +78,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[OVERLAY_MIN] = minimized }
     }
 
-    suspend fun setOverlayPosition(x: Int, y: Int) {
-        dataStore.edit { it[OVERLAY_X] = x; it[OVERLAY_Y] = y }
+    suspend fun setOverlayPosition(x: Int, y: Int, w: Int, h: Int) {
+        dataStore.edit { it[OVERLAY_X] = x; it[OVERLAY_Y] = y; it[OVERLAY_W] = w; it[OVERLAY_H] = h }
     }
 
     /** Both null clears the saved heart-rate device. */

@@ -42,12 +42,17 @@ class OverlayPrefsTest {
     }
 
     @Test fun positionPersists() = runBlocking {
-        prefs.setPosition(OverlayPosition(100, 200))
-        assertEquals(OverlayPosition(100, 200), prefs.load().position)
+        prefs.setPlacement(OverlayPlacement(OverlayPosition(100, 200), 557, 360))
+        assertEquals(OverlayPlacement(OverlayPosition(100, 200), 557, 360), prefs.load().placement)
     }
 
-    @Test fun onlyXGivesNullPosition() = runBlocking {
+    @Test fun onlyXGivesNullPlacement() = runBlocking {
         dataStore.edit { it[intPreferencesKey("overlayX")] = 100 }
-        assertEquals(null, prefs.load().position)
+        assertEquals(null, prefs.load().placement)
+    }
+
+    @Test fun legacyXYOnlyLoadsWithZeroViewSize() = runBlocking {
+        dataStore.edit { it[intPreferencesKey("overlayX")] = 1296; it[intPreferencesKey("overlayY")] = 337 }
+        assertEquals(OverlayPlacement(OverlayPosition(1296, 337), 0, 0), prefs.load().placement)
     }
 }

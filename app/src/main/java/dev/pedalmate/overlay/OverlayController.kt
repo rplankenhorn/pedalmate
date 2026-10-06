@@ -20,18 +20,18 @@ class OverlayController(
     private val window = OverlayWindow(windowManager, canDraw)
     private var params: WindowManager.LayoutParams? = null
     private var keepScreenOn = false
-    private var onMoved: (OverlayPosition) -> Unit = {}
+    private var onMoved: (OverlayPlacement) -> Unit = {}
+    private var initial: OverlayPlacement? = null
     private var placed = false // true after the first layout decided the position
-    private var hasInitial = false
-    private var viewW = 0
+        private var viewW = 0
     private var viewH = 0
     val isShowing: Boolean get() = window.isShowing
 
-    fun show(content: @Composable () -> Unit, initial: OverlayPosition?, onMoved: (OverlayPosition) -> Unit): ShowResult {
+    fun show(content: @Composable () -> Unit, initial: OverlayPlacement?, onMoved: (OverlayPlacement) -> Unit): ShowResult {
         if (window.isShowing) return ShowResult.ALREADY_SHOWN
         this.onMoved = onMoved
         placed = false
-        hasInitial = initial != null
+        this.initial = initial
         viewW = 0
         viewH = 0
         val p = WindowManager.LayoutParams(
@@ -42,8 +42,8 @@ class OverlayController(
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = initial?.x ?: screenSize().first // WindowManager clamps; the first layout corrects it
-            y = initial?.y ?: screenSize().second / 2 // placeholder; the first layout centers it
+            x = initial?.position?.x ?: screenSize().first // WindowManager clamps; the first layout corrects it
+            y = initial?.position?.y ?: screenSize().second / 2 // placeholder; the first layout centers it
         }
         val host = ComposeOverlayHost(context, ::dragBy, ::dragEnded, content)
         host.root.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
@@ -81,10 +81,13 @@ class OverlayController(
         val next = when {
             !placed -> {
                 placed = true
-                if (hasInitial) {
-                    OverlayGeometry.clampToScreen(OverlayPosition(p.x, p.y), w, h, sw, sh)
-                } else {
-                    OverlayGeometry.defaultPosition(w, h, sw, sh)
+                val saved = initial
+                when {
+                    saved == null -> OverlayGeometry.defaultPosition(w, h, sw, sh)
+                    saved.viewW > 0 -> OverlayGeometry.clampToScreen(
+                        OverlayGeometry.reanchor(saved.position, saved.viewW, saved.viewH, w, h, sw, sh), w, h, sw, sh,
+                    )
+                    else -> OverlayGeometry.clampToScreen(saved.position, w, h, sw, sh)
                 }
             }
             prevW > 0 && prevW != w -> OverlayGeometry.clampToScreen(
@@ -115,6 +118,6 @@ class OverlayController(
         p.x = snapped.x
         p.y = snapped.y
         window.update(p)
-        onMoved(snapped)
+        onMoved(OverlayPlacement(snapped, viewW, viewH))
     }
 }

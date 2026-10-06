@@ -32,6 +32,7 @@ class OverlayControllerTest {
     private val notFocusable = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
     private val keepOn = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
 
+    private fun legacy(x: Int, y: Int) = OverlayPlacement(OverlayPosition(x, y), 0, 0)
     private fun lifecycleOf(v: View) = v.findViewTreeLifecycleOwner()!!.lifecycle.currentState
     private fun ev(action: Int, x: Float, y: Float) = MotionEvent.obtain(0L, 0L, action, x, y, 0)
 
@@ -132,7 +133,7 @@ class OverlayControllerTest {
 
     @Test
     fun initialPositionBeforeLayout() {
-        controller.show(content, OverlayPosition(300, 50)) {}
+        controller.show(content, legacy(300, 50)) {}
         assertEquals(300, fake.added[0].params.x)
         assertEquals(50, fake.added[0].params.y)
     }
@@ -148,7 +149,7 @@ class OverlayControllerTest {
 
     @Test
     fun firstLayoutClampsSavedPosition() {
-        controller.show(content, OverlayPosition(1900, 5000)) {}
+        controller.show(content, legacy(1900, 5000)) {}
         fake.added[0].view.layout(0, 0, 240, 300)
         val p = fake.updates.last().second
         assertEquals(1680, p.x)
@@ -166,7 +167,7 @@ class OverlayControllerTest {
 
     @Test
     fun widthChangeKeepsMidScreenX() {
-        controller.show(content, OverlayPosition(500, 100)) {}
+        controller.show(content, legacy(500, 100)) {}
         val v = fake.added[0].view
         v.layout(0, 0, 240, 300)
         v.layout(0, 0, 120, 300)
@@ -175,8 +176,8 @@ class OverlayControllerTest {
 
     @Test
     fun dragEndToEndSnapsAndReportsMoved() {
-        val moved = mutableListOf<OverlayPosition>()
-        controller.show(content, OverlayPosition(1000, 200)) { moved += it }
+        val moved = mutableListOf<OverlayPlacement>()
+        controller.show(content, legacy(1000, 200)) { moved += it }
         val view = fake.added[0].view as DraggableFrameLayout
         val params = fake.added[0].params
         view.layout(0, 0, 240, 300)
@@ -188,23 +189,53 @@ class OverlayControllerTest {
         assertEquals(1650, params.x)
         view.onTouchEvent(ev(MotionEvent.ACTION_UP, 650f, 0f))
         assertEquals(1680, params.x)
-        assertEquals(OverlayPosition(1680, 200), moved.last())
+        assertEquals(OverlayPlacement(OverlayPosition(1680, 200), 240, 300), moved.last())
 
         view.onInterceptTouchEvent(ev(MotionEvent.ACTION_DOWN, 0f, 0f))
         assertTrue(view.onInterceptTouchEvent(ev(MotionEvent.ACTION_MOVE, 0f, -300f)))
         view.onTouchEvent(ev(MotionEvent.ACTION_UP, 0f, -300f))
         assertEquals(0, params.y)
-        assertEquals(0, moved.last().y)
+        assertEquals(0, moved.last().position.y)
     }
 
     @Test
     fun tapNeverCallsOnMoved() {
-        val moved = mutableListOf<OverlayPosition>()
+        val moved = mutableListOf<OverlayPlacement>()
         controller.show(content, null) { moved += it }
         val view = fake.added[0].view as DraggableFrameLayout
         view.layout(0, 0, 240, 300)
         view.onInterceptTouchEvent(ev(MotionEvent.ACTION_DOWN, 5f, 5f))
         view.onInterceptTouchEvent(ev(MotionEvent.ACTION_UP, 5f, 5f))
         assertTrue(moved.isEmpty())
+    }
+
+    @Test
+    fun firstLayoutReanchorsPlacementSavedAtAnotherViewSize() {
+        controller.show(content, OverlayPlacement(OverlayPosition(1296, 337), 624, 406)) {}
+        fake.added[0].view.layout(0, 0, 557, 360)
+        val p = fake.updates.last().second
+        assertEquals(1363, p.x)
+        assertEquals(360, p.y)
+    }
+
+    @Test
+    fun firstLayoutClampsLegacyPlacementVerbatim() {
+        controller.show(content, legacy(1296, 337)) {}
+        fake.added[0].view.layout(0, 0, 557, 360)
+        assertEquals(1296, fake.added[0].params.x)
+        assertEquals(337, fake.added[0].params.y)
+    }
+
+    @Test
+    fun dragEndReportsLiveViewSize() {
+        val moved = mutableListOf<OverlayPlacement>()
+        controller.show(content, null) { moved += it }
+        val view = fake.added[0].view as DraggableFrameLayout
+        view.layout(0, 0, 200, 100)
+        view.onInterceptTouchEvent(ev(MotionEvent.ACTION_DOWN, 0f, 0f))
+        view.onInterceptTouchEvent(ev(MotionEvent.ACTION_MOVE, 0f, -slop - 10f))
+        view.onTouchEvent(ev(MotionEvent.ACTION_UP, 0f, -slop - 10f))
+        assertEquals(200, moved.last().viewW)
+        assertEquals(100, moved.last().viewH)
     }
 }
