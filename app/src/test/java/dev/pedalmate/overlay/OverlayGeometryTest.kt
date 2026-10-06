@@ -38,8 +38,13 @@ class OverlayGeometryTest {
     @Test fun defaultLargerThanScreenClampsToOrigin() =
         assertEquals(OverlayPosition(0, 0), OverlayGeometry.defaultPosition(2000, 1200, 1920, 1080))
 
-    private fun re(x: Int, y: Int, prevW: Int, newW: Int) =
-        OverlayGeometry.reanchor(OverlayPosition(x, y), prevW, newW, sw)
+    private fun re(x: Int, y: Int, prevW: Int, newW: Int, prevH: Int = 200, newH: Int = 200) =
+        OverlayGeometry.reanchor(OverlayPosition(x, y), prevW, prevH, newW, newH, sw, sh)
+
+    @Test fun reanchorPanelToPillKeepsVerticalCentre() = assertEquals(518, re(1680, 390, 640, 240, prevH = 300, newH = 44).y)
+    @Test fun reanchorPillToPanelKeepsVerticalCentre() = assertEquals(390, re(1680, 518, 240, 640, prevH = 44, newH = 300).y)
+    @Test fun reanchorVerticalCentreClampsAtBottom() = assertEquals(780, re(1680, 1000, 240, 640, prevH = 44, newH = 300).y)
+    @Test fun reanchorVerticalCentreClampsAtTop() = assertEquals(0, re(1680, 0, 240, 640, prevH = 44, newH = 300).y)
 
     @Test fun reanchorDockedRightNarrower() = assertEquals(OverlayPosition(1800, 100), re(1680, 100, 240, 120))
     @Test fun reanchorDockedRightWider() = assertEquals(OverlayPosition(1520, 100), re(1680, 100, 240, 400))

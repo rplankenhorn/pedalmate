@@ -46,8 +46,8 @@ class OverlayController(
             y = initial?.y ?: screenSize().second / 2 // placeholder; the first layout centers it
         }
         val host = ComposeOverlayHost(context, ::dragBy, ::dragEnded, content)
-        host.root.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, _, oldRight, _ ->
-            onLayout(right - left, bottom - top, oldRight - oldLeft)
+        host.root.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            onLayout(right - left, bottom - top, oldRight - oldLeft, oldBottom - oldTop)
         }
         params = p
         val result = window.show(host, p)
@@ -72,7 +72,7 @@ class OverlayController(
     private fun flags() = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
         (if (keepScreenOn) WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON else 0)
 
-    private fun onLayout(w: Int, h: Int, prevW: Int) {
+    private fun onLayout(w: Int, h: Int, prevW: Int, prevH: Int) {
         val p = params ?: return
         viewW = w
         viewH = h
@@ -88,7 +88,7 @@ class OverlayController(
                 }
             }
             prevW > 0 && prevW != w -> OverlayGeometry.clampToScreen(
-                OverlayGeometry.reanchor(OverlayPosition(p.x, p.y), prevW, w, sw), w, h, sw, sh,
+                OverlayGeometry.reanchor(OverlayPosition(p.x, p.y), prevW, prevH, w, h, sw, sh), w, h, sw, sh,
             )
             else -> return
         }

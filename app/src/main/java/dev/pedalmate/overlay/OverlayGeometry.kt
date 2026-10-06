@@ -28,10 +28,12 @@ object OverlayGeometry {
     fun defaultPosition(viewW: Int, viewH: Int, screenW: Int, screenH: Int) =
         OverlayPosition(maxCoord(screenW, viewW), maxCoord(screenH, viewH) / 2)
 
-    fun reanchor(prev: OverlayPosition, prevW: Int, newW: Int, screenW: Int): OverlayPosition {
+    /** Keeps the right/left docking (x) and the vertical centre (y) when the view changes size. */
+    fun reanchor(prev: OverlayPosition, prevW: Int, prevH: Int, newW: Int, newH: Int, screenW: Int, screenH: Int): OverlayPosition {
         val prevMax = maxCoord(screenW, prevW)
         val dockedRight = prevMax > 0 && prev.x == prevMax
         val newMax = maxCoord(screenW, newW)
-        return OverlayPosition(if (dockedRight) newMax else prev.x.coerceIn(0, newMax), prev.y)
+        val y = (prev.y + prevH / 2 - newH / 2).coerceIn(0, maxCoord(screenH, newH))
+        return OverlayPosition(if (dockedRight) newMax else prev.x.coerceIn(0, newMax), y)
     }
 }
