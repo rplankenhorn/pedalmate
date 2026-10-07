@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import dev.pedalmate.R
 import dev.pedalmate.data.appContainer
@@ -39,6 +40,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.map
@@ -60,6 +62,10 @@ class RideService : Service() {
     private lateinit var toast: IntervalToast
     private var overlayJob: Job? = null
     private val container get() = appContainer
+    private var lastStartId = 0
+
+    /** How long a finished ride keeps the panel up before the service stops itself; tests shorten it. */
+    @VisibleForTesting internal var finishedLingerMs: Long = FINISHED_LINGER_MS
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -78,6 +84,15 @@ class RideService : Service() {
         uiScope.launch {
             container.session.snapshot.map { it.status == RideStatus.IDLE }.distinctUntilChanged()
                 .collect { idle -> if (idle) toast.cancel() }
+        }
+        uiScope.launch {                          // a finished ride lingers, then ends exactly as STOP would
+            container.session.snapshot.map { it.status }.distinctUntilChanged().collectLatest { status ->
+                if (status != RideStatus.FINISHED) return@collectLatest
+                delay(finishedLingerMs)
+                if (container.session.snapshot.value.status != RideStatus.FINISHED) return@collectLatest
+                Log.i("PedalMate", "ride finished ${finishedLingerMs / 1000}s ago, stopping the service")
+                stopRide(lastStartId)
+            }
         }
         overlayJob = uiScope.launch {
             minimized = prefs.load().minimized
@@ -126,6 +141,7 @@ class RideService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
         enterForeground()                         // the foreground contract comes first, whatever we decide next
         val session = container.session
         when (RideServicePolicy.decide(intent?.action, intent == null, session.isActive)) {
@@ -228,6 +244,7 @@ class RideService : Service() {
         private const val CHANNEL_ID = "ride"
         private const val NOTIFICATION_ID = 1
         private const val TICK_MS = 250L
+        const val FINISHED_LINGER_MS = 120_000L
 
         /** Starts a workout ride, or a free ride when [workoutId] is null. */
         fun start(context: Context, workoutId: String?) {

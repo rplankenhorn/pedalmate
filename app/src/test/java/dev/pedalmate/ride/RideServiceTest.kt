@@ -35,8 +35,31 @@ class RideServiceTest {
         controller.destroy()
     }
 
-    private fun send(action: String?, startId: Int): Int =
-        service.onStartCommand(action?.let { Intent(app, RideService::class.java).setAction(it) }, 0, startId)
+    private fun send(action: String?, startId: Int, workoutId: String? = null): Int =
+        service.onStartCommand(
+            action?.let {
+                Intent(app, RideService::class.java).setAction(it).also { i ->
+                    if (workoutId != null) i.putExtra(RideService.EXTRA_WORKOUT_ID, workoutId)
+                }
+            },
+            0,
+            startId,
+        )
+
+    private fun finishWorkoutRide(startId: Int) {
+        send(RideService.ACTION_START, startId, "pz-43")
+        awaitUntil("workout running") { container.session.snapshot.value.status == RideStatus.RUNNING }
+        var skips = 0
+        while (container.session.snapshot.value.status != RideStatus.FINISHED) {
+            check(++skips <= 20) { "workout did not finish after 20 skips" }
+            val stepBefore = container.session.snapshot.value.workout?.stepIndex
+            container.session.skip()
+            awaitUntil("skip #$skips to be published") {
+                val s = container.session.snapshot.value
+                s.status == RideStatus.FINISHED || s.workout?.stepIndex != stepBefore
+            }
+        }
+    }
 
     private fun awaitUntil(what: String, timeoutMs: Long = 15_000, cond: () -> Boolean) {
         val end = System.currentTimeMillis() + timeoutMs
@@ -87,5 +110,27 @@ class RideServiceTest {
         runBlocking { container.session.startFreeRide() }
         service.onStartCommand(null, 0, 1)         // CONTINUE: the foreground notification stays posted
         assertNotNull(shadowOf(service as Service).lastForegroundNotification.contentIntent)
+    }
+
+    @Test fun `a finished ride stops the service after the linger`() {
+        service.finishedLingerMs = 300
+        finishWorkoutRide(1)
+        awaitUntil("service stopped with #1") { stoppedWith(1) }
+        awaitUntil("session idle") { container.session.snapshot.value.status == RideStatus.IDLE }
+        assertFalse(container.session.isActive)
+    }
+
+    @Test fun `a start during the linger cancels the auto-stop`() {
+        service.finishedLingerMs = 500
+        finishWorkoutRide(1)
+        send(RideService.ACTION_START, 2)
+        awaitUntil("free ride running") { container.session.snapshot.value.status == RideStatus.RUNNING }
+        val end = System.currentTimeMillis() + 1_500
+        awaitUntil("linger window to pass", timeoutMs = 5_000) { System.currentTimeMillis() >= end }
+        assertTrue(container.session.isActive)
+        assertEquals(RideStatus.RUNNING, container.session.snapshot.value.status)
+        assertFalse(shadowOf(service as Service).isStoppedBySelf)
+        assertFalse(stoppedWith(1))
+        assertFalse(stoppedWith(2))
     }
 }
