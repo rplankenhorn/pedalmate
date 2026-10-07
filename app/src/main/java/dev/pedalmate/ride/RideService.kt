@@ -12,12 +12,12 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
 import android.view.WindowManager
+import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.annotation.VisibleForTesting
 import androidx.core.content.ContextCompat
 import dev.pedalmate.R
 import dev.pedalmate.data.appContainer
@@ -88,9 +88,10 @@ class RideService : Service() {
         uiScope.launch {                          // a finished ride lingers, then ends exactly as STOP would
             container.session.snapshot.map { it.status }.distinctUntilChanged().collectLatest { status ->
                 if (status != RideStatus.FINISHED) return@collectLatest
+                // keepScreenOn is false during the linger; if the bike deep-sleeps this delay fires on wake (accepted).
                 delay(finishedLingerMs)
                 if (container.session.snapshot.value.status != RideStatus.FINISHED) return@collectLatest
-                Log.i("PedalMate", "ride finished ${finishedLingerMs / 1000}s ago, stopping the service")
+                Log.i("PedalMate", "ride finished ${finishedLingerMs} ms ago, stopping the service")
                 stopRide(lastStartId)
             }
         }
