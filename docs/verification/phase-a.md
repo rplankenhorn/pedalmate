@@ -53,6 +53,6 @@ Result: PASS (2026-10-04)  Notes:
 10-06 12:36:19.476  2608  2655 I BleHeartRate: connecting to 79:2E:8E:0B:CE:6B (BlueHeart) viaScan=false fallback=false
 10-06 12:38:46.440  2608  2656 I PedalMate: bike frames=22596 state=Connected polling=false
 ```
-- Foreground service continues logging status every 5 s after ride reaches FINISHED, until STOP is pressed (observed ~19 h later, bead pedalmate-815, p3).
-- Polish shipped in build 1369dc8: HR connect fast-fail on link failure, pill touch target >= 48 dp (dfb0466), mock flavor label "PedalMate (mock)" (cee041c).
-Result: PARTIAL (2026-10-07, head 1369dc8) - remaining: HR pairing with HeartCast on the bike, overlay tap-through during a real Lichess move, HR reconnect after the phone sleeps.
+- Foreground service kept logging status every 5 s after a ride reached FINISHED (observed ~19 h later, bead pedalmate-815): fixed in 49c4e7b, the service now stops itself 120 s after FINISHED while the panel shows "Done" (emulator smoke: stop logged at 120 s, service and overlay gone). Resolved.
+- Polish shipped in build 1369dc8: HR connect fast-fail on link failure, pill touch target >= 48 dp (dfb0466), mock flavor label "PedalMate (mock)" (cee041c). Build 49c4e7b adds the post-finish auto-stop (pedalmate-815) and test-summary logging (pedalmate-j3y).
+Result: PARTIAL (2026-10-07, head 49c4e7b) - remaining: HR pairing with HeartCast on the bike, overlay tap-through during a real Lichess move, HR reconnect after the phone sleeps.
