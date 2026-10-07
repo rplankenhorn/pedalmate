@@ -33,6 +33,8 @@ class OverlayControllerTest {
     private val keepOn = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
 
     private fun legacy(x: Int, y: Int) = OverlayPlacement(OverlayPosition(x, y), 0, 0)
+    /** A saved placement that carries the 240x300 view size used by the layout calls below. */
+    private fun sized(x: Int, y: Int) = OverlayPlacement(OverlayPosition(x, y), 240, 300)
     private fun lifecycleOf(v: View) = v.findViewTreeLifecycleOwner()!!.lifecycle.currentState
     private fun ev(action: Int, x: Float, y: Float) = MotionEvent.obtain(0L, 0L, action, x, y, 0)
 
@@ -149,7 +151,7 @@ class OverlayControllerTest {
 
     @Test
     fun firstLayoutClampsSavedPosition() {
-        controller.show(content, legacy(1900, 5000)) {}
+        controller.show(content, sized(1900, 5000)) {}
         fake.added[0].view.layout(0, 0, 240, 300)
         val p = fake.updates.last().second
         assertEquals(1680, p.x)
@@ -167,7 +169,7 @@ class OverlayControllerTest {
 
     @Test
     fun widthChangeKeepsMidScreenX() {
-        controller.show(content, legacy(500, 100)) {}
+        controller.show(content, sized(500, 100)) {}
         val v = fake.added[0].view
         v.layout(0, 0, 240, 300)
         v.layout(0, 0, 120, 300)
@@ -177,7 +179,7 @@ class OverlayControllerTest {
     @Test
     fun dragEndToEndSnapsAndReportsMoved() {
         val moved = mutableListOf<OverlayPlacement>()
-        controller.show(content, legacy(1000, 200)) { moved += it }
+        controller.show(content, sized(1000, 200)) { moved += it }
         val view = fake.added[0].view as DraggableFrameLayout
         val params = fake.added[0].params
         view.layout(0, 0, 240, 300)
@@ -219,11 +221,12 @@ class OverlayControllerTest {
     }
 
     @Test
-    fun firstLayoutClampsLegacyPlacementVerbatim() {
+    fun firstLayoutFallsBackToDefaultForLegacyPlacement() {
         controller.show(content, legacy(1296, 337)) {}
         fake.added[0].view.layout(0, 0, 557, 360)
-        assertEquals(1296, fake.added[0].params.x)
-        assertEquals(337, fake.added[0].params.y)
+        val expected = OverlayGeometry.defaultPosition(557, 360, 1920, 1080)
+        assertEquals(expected.x, fake.added[0].params.x)
+        assertEquals(expected.y, fake.added[0].params.y)
     }
 
     @Test

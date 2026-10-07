@@ -83,11 +83,11 @@ class OverlayController(
                 placed = true
                 val saved = initial
                 when {
-                    saved == null -> OverlayGeometry.defaultPosition(w, h, sw, sh)
-                    saved.viewW > 0 -> OverlayGeometry.clampToScreen(
+                    // no saved size (null, or prefs written before R3 with a stale top-left): default dock
+                    saved == null || saved.viewW <= 0 -> OverlayGeometry.defaultPosition(w, h, sw, sh)
+                    else -> OverlayGeometry.clampToScreen(
                         OverlayGeometry.reanchor(saved.position, saved.viewW, saved.viewH, w, h, sw, sh), w, h, sw, sh,
                     )
-                    else -> OverlayGeometry.clampToScreen(saved.position, w, h, sw, sh)
                 }
             }
             prevW > 0 && prevW != w -> OverlayGeometry.clampToScreen(
