@@ -53,6 +53,7 @@ class PillTouchTargetTest {
         host.root.measure(unbounded, unbounded)
         val minPx = (48f * OVERLAY_SCALE * BASE_DENSITY).roundToInt()
         assertTrue("pill height ${host.root.measuredHeight} < $minPx", host.root.measuredHeight >= minPx)
+        // Non-discriminating by design: padding plus dot already exceed the 48 dp floor in px at this density.
         assertTrue("pill width ${host.root.measuredWidth} < $minPx", host.root.measuredWidth >= minPx)
     }
 }

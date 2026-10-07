@@ -224,9 +224,8 @@ class OverlayControllerTest {
     fun firstLayoutFallsBackToDefaultForLegacyPlacement() {
         controller.show(content, legacy(1296, 337)) {}
         fake.added[0].view.layout(0, 0, 557, 360)
-        val expected = OverlayGeometry.defaultPosition(557, 360, 1920, 1080)
-        assertEquals(expected.x, fake.added[0].params.x)
-        assertEquals(expected.y, fake.added[0].params.y)
+        assertEquals(1363, fake.added[0].params.x)
+        assertEquals(360, fake.added[0].params.y)
     }
 
     @Test

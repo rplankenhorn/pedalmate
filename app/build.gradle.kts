@@ -70,6 +70,18 @@ android {
     }
 }
 
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
+    afterSuite(KotlinClosure2<TestDescriptor, TestResult, Unit>({ d, r ->
+        if (d.parent == null) {
+            println("TEST SUMMARY $name: ${r.testCount} tests, ${r.successfulTestCount} passed, ${r.failedTestCount} failed, ${r.skippedTestCount} skipped")
+        }
+    }))
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }

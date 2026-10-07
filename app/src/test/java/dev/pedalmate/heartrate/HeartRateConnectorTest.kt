@@ -193,13 +193,19 @@ class HeartRateConnectorTest {
         scanner.emit(BleDevice("C", "HR-1")); tick(500)
         val viaScan = factory.created.last()
         tick(2_000)
+        val scansBefore = scanner.startCount
         viaScan.failNow(); tick(500)
         assertTrue(viaScan.stopped)
         assertEquals(ConnectionState.Unavailable, state)
+        // fail path, not the scan fall-through: no new scan was started by the failing tick
+        assertEquals(scansBefore, scanner.startCount)
         // backoff, not an immediate retry: no new link until the backoff elapses
         val n = factory.created.size
         tick(1_000)
         assertEquals(n, factory.created.size)
+        tick(HeartRateConnector.BACKOFF_BASE_MS)
+        assertEquals(n + 1, factory.created.size)
+        assertTrue(factory.created.last() !== viaScan)
     }
 
     @Test fun `a link that has not failed is still connecting at 7 s`() {
