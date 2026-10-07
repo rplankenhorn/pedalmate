@@ -36,6 +36,7 @@ class FakeLink(val address: String, val createdAtMs: Long) : HeartRateLink {
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Unavailable)
     override val connectionState: StateFlow<ConnectionState> = _state
     override var framesReceived = 0L; private set
+    override var failed = false
     var started = false; private set
     var stopped = false; private set
 
@@ -43,6 +44,8 @@ class FakeLink(val address: String, val createdAtMs: Long) : HeartRateLink {
     override fun stop() { stopped = true }
     /** One notification frame; equal consecutive values still count as frames. */
     fun frame(bpm: Int) { _bpm.value = bpm; framesReceived++; _state.value = ConnectionState.Connected }
+    /** The attempt can no longer produce a first frame (e.g. characteristic not found). */
+    fun failNow() { failed = true; _state.value = ConnectionState.Unavailable }
     fun drop() { _state.value = ConnectionState.Disconnected }
 }
 

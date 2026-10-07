@@ -58,6 +58,9 @@ class BleHeartRateDataSource(
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Unavailable)
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
+    @Volatile private var hasFailed = false
+    override val failed: Boolean get() = hasFailed
+
     private var gatt: BluetoothGatt? = null
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -68,11 +71,13 @@ class BleHeartRateDataSource(
                         g?.discoverServices()
                     } catch (e: SecurityException) {
                         Log.w(TAG, "discoverServices denied", e)
+                        hasFailed = true
                         _connectionState.value = ConnectionState.Unavailable
                     }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     val wasEverConnected = _connectionState.value == ConnectionState.Connected
+                    if (!wasEverConnected) hasFailed = true
                     _connectionState.value = if (wasEverConnected) ConnectionState.Disconnected else ConnectionState.Unavailable
                     releaseGatt()
                 }
@@ -87,6 +92,7 @@ class BleHeartRateDataSource(
             }
             if (g == null || characteristic == null) {
                 Log.w(TAG, "Heart Rate Measurement characteristic not found (status=$status)")
+                hasFailed = true
                 _connectionState.value = ConnectionState.Unavailable
                 return
             }
@@ -107,6 +113,7 @@ class BleHeartRateDataSource(
                 // Stay Unavailable/Disconnected until a real frame arrives - see class doc.
             } catch (e: SecurityException) {
                 Log.w(TAG, "Notification subscribe denied", e)
+                hasFailed = true
                 _connectionState.value = ConnectionState.Unavailable
             }
         }
@@ -144,19 +151,23 @@ class BleHeartRateDataSource(
         try {
             val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
             if (adapter == null) {
+                hasFailed = true
                 _connectionState.value = ConnectionState.Unavailable
                 return
             }
             val device = adapter.getRemoteDevice(deviceAddress)
             gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
             if (gatt == null) {
+                hasFailed = true
                 _connectionState.value = ConnectionState.Unavailable
             }
         } catch (e: SecurityException) {
             Log.w(TAG, "Connect denied - missing BLUETOOTH_CONNECT permission", e)
+            hasFailed = true
             _connectionState.value = ConnectionState.Unavailable
         } catch (e: IllegalArgumentException) {
             Log.w(TAG, "Invalid BLE device address: $deviceAddress", e)
+            hasFailed = true
             _connectionState.value = ConnectionState.Unavailable
         }
     }

@@ -180,6 +180,43 @@ class HeartRateConnectorTest {
         assertEquals("A", factory.created.last().address)
     }
 
+    @Test fun `a direct attempt whose link fails early falls through to the scan before the timeout`() {
+        hr.start(); tick(2_000)
+        assertEquals(0, scanner.startCount)
+        factory.created.last().failNow(); tick(500)
+        assertEquals(1, scanner.startCount)
+        assertTrue(factory.created.last().stopped)
+    }
+
+    @Test fun `a scan-selected link that fails early takes the fail path and backs off`() {
+        hr.start(); tick(8_000)
+        scanner.emit(BleDevice("C", "HR-1")); tick(500)
+        val viaScan = factory.created.last()
+        tick(2_000)
+        viaScan.failNow(); tick(500)
+        assertTrue(viaScan.stopped)
+        assertEquals(ConnectionState.Unavailable, state)
+        // backoff, not an immediate retry: no new link until the backoff elapses
+        val n = factory.created.size
+        tick(1_000)
+        assertEquals(n, factory.created.size)
+    }
+
+    @Test fun `a link that has not failed is still connecting at 7 s`() {
+        hr.start(); tick(7_000)
+        assertEquals(0, scanner.startCount)
+        assertEquals(1, factory.created.size)
+        assertTrue(!factory.created.last().stopped)
+    }
+
+    @Test fun `frames win over failed on the same tick`() {
+        hr.start()
+        val l = factory.created.last()
+        l.failNow(); l.frame(80); tick(500)
+        assertEquals(ConnectionState.Connected, state)
+        assertEquals(0, scanner.startCount)
+    }
+
     @Test fun `useDevice saves and reconnects immediately`() {
         store.device = null
         hr.start(); tick(2_000)

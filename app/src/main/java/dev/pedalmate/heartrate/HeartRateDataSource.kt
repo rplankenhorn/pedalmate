@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Abstraction over a single paired BLE heart-rate strap's live feed (PRD P1-4, T17). Mirrors
- * [dev.pedalmate.sensor.BikeDataSource]'s shape deliberately — same
+ * [dev.pedalmate.sensor.BikeDataSource]'s shape deliberately - same
  * "narrow interface + real/fake implementations" pattern, reusing the existing
  * [ConnectionState] sealed type rather than inventing a parallel one.
  */
@@ -19,7 +19,7 @@ interface HeartRateDataSource {
 }
 
 /**
- * A [HeartRateDataSource] that also owns a connect/disconnect lifecycle — separated from the
+ * A [HeartRateDataSource] that also owns a connect/disconnect lifecycle - separated from the
  * plain read-only interface so [HeartRateConnector] can test its reconnect-on-profile-switch
  * logic against a lightweight fake without that fake needing to be a real
  * [BleHeartRateDataSource].
@@ -40,4 +40,11 @@ interface ManagedHeartRateDataSource : HeartRateDataSource {
 interface HeartRateLink : ManagedHeartRateDataSource {
     /** Number of Heart Rate Measurement frames decoded since [start]. */
     val framesReceived: Long
+
+    /**
+     * True once this attempt can no longer produce a first frame: GATT connect refused, disconnected before
+     * the first frame, services discovered without the Heart Rate Measurement characteristic, or subscribe
+     * denied. Never reset; the connector discards the link and starts a new one.
+     */
+    val failed: Boolean
 }

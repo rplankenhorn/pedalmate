@@ -162,6 +162,12 @@ class HeartRateConnector(
     private fun tickConnecting(now: Long) {
         val l = link ?: return fail(now)
         if (l.framesReceived > 0) { onFirstFrame(l, now); return }
+        if (l.failed) {
+            Log.i(TAG, "link failed before first frame, giving up early")
+            closeLink()
+            if (attemptViaScan) fail(now) else startScan(now)
+            return
+        }
         if (now - attemptStartedAt >= CONNECT_TIMEOUT_MS) {
             closeLink()
             if (attemptViaScan) fail(now) else startScan(now)
