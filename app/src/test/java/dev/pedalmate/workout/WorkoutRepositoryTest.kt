@@ -39,6 +39,33 @@ class WorkoutRepositoryTest {
         assertNull(repo.byId("missing"))
     }
 
+    @Test fun `asset read IOException is reported and other workouts still load`() {
+        val inner = MemAssets(mapOf("workouts/a.json" to json("a"), "workouts/b.json" to json("b"), "workouts/c.json" to json("c")))
+        val repo = WorkoutRepository(
+            object : AssetReader {
+                override fun list(dir: String) = inner.list(dir)
+                override fun read(path: String): String =
+                    if (path.endsWith("b.json")) throw java.io.IOException("boom") else inner.read(path)
+            },
+        )
+        val result = repo.load()
+        assertEquals(listOf("a", "c"), result.workouts.map { it.id })
+        assertEquals(setOf("b.json"), result.errors.keys)
+        assertTrue(result.errors.getValue("b.json"), result.errors.getValue("b.json").contains("boom"))
+    }
+
+    @Test fun `duplicate id keeps first file and reports second naming both`() {
+        val repo = WorkoutRepository(
+            MemAssets(mapOf("workouts/a.json" to json("same", 60), "workouts/b.json" to json("same", 90))),
+        )
+        val result = repo.load()
+        assertEquals(1, result.workouts.size)
+        assertEquals(60, result.workouts[0].totalSeconds)
+        assertEquals(setOf("b.json"), result.errors.keys)
+        val msg = result.errors.getValue("b.json")
+        assertTrue(msg, msg.contains("a.json") && msg.contains("b.json") && msg.contains("same"))
+    }
+
     private val presets = WorkoutRepository(DirAssets(java.io.File("src/main/assets/workouts")))
 
     @Test fun `presets load without errors and ids match file names`() {

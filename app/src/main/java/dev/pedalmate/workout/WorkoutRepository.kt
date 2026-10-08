@@ -14,11 +14,21 @@ class WorkoutRepository(private val assets: AssetReader, private val dir: String
     private val result: LoadResult by lazy {
         val workouts = mutableListOf<WorkoutDefinition>()
         val errors = linkedMapOf<String, String>()
+        val sources = HashMap<String, String>()
         for (name in assets.list(dir).filter { it.endsWith(".json") }.sorted()) {
             try {
-                workouts += WorkoutJson.parse(assets.read("$dir/$name"))
+                val w = WorkoutJson.parse(assets.read("$dir/$name"))
+                val first = sources[w.id]
+                if (first != null) {
+                    errors[name] = "duplicate id '${w.id}' (already defined in $first); $name ignored"
+                } else {
+                    sources[w.id] = name
+                    workouts += w
+                }
             } catch (e: WorkoutFormatException) {
                 errors[name] = e.message ?: "invalid workout"
+            } catch (e: java.io.IOException) {
+                errors[name] = "could not read: ${e.message ?: e.javaClass.simpleName}"
             }
         }
         LoadResult(workouts, errors)
