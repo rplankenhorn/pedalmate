@@ -54,7 +54,7 @@ class WorkoutRepositoryTest {
         assertTrue(result.errors.getValue("b.json"), result.errors.getValue("b.json").contains("boom"))
     }
 
-    @Test fun `duplicate id keeps first file and reports second naming both`() {
+    @Test fun `duplicate id keeps first file and reports second naming the first`() {
         val repo = WorkoutRepository(
             MemAssets(mapOf("workouts/a.json" to json("same", 60), "workouts/b.json" to json("same", 90))),
         )
@@ -63,7 +63,7 @@ class WorkoutRepositoryTest {
         assertEquals(60, result.workouts[0].totalSeconds)
         assertEquals(setOf("b.json"), result.errors.keys)
         val msg = result.errors.getValue("b.json")
-        assertTrue(msg, msg.contains("a.json") && msg.contains("b.json") && msg.contains("same"))
+        assertTrue(msg, msg.contains("a.json") && msg.contains("same"))
     }
 
     private val presets = WorkoutRepository(DirAssets(java.io.File("src/main/assets/workouts")))

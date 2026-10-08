@@ -1,5 +1,7 @@
 package dev.pedalmate.workout
 
+import java.io.IOException
+
 /** Minimal asset access so the workout package stays free of Android types. */
 interface AssetReader {
     fun list(dir: String): List<String>
@@ -20,14 +22,14 @@ class WorkoutRepository(private val assets: AssetReader, private val dir: String
                 val w = WorkoutJson.parse(assets.read("$dir/$name"))
                 val first = sources[w.id]
                 if (first != null) {
-                    errors[name] = "duplicate id '${w.id}' (already defined in $first); $name ignored"
+                    errors[name] = "duplicate id '${w.id}' (already defined in $first); ignored"
                 } else {
                     sources[w.id] = name
                     workouts += w
                 }
             } catch (e: WorkoutFormatException) {
                 errors[name] = e.message ?: "invalid workout"
-            } catch (e: java.io.IOException) {
+            } catch (e: IOException) {
                 errors[name] = "could not read: ${e.message ?: e.javaClass.simpleName}"
             }
         }
