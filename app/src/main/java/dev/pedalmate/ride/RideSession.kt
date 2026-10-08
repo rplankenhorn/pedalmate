@@ -67,16 +67,19 @@ class RideSession(
     suspend fun startFreeRide(): StartResult = begin(null)
 
     private suspend fun begin(def: WorkoutDefinition?): StartResult {
-        // Join outside the lock: a restart must not reach rideLog.begin() while the previous ride is still finishing.
-        synchronized(this) { finishJob }?.join()
         val wasFinished: Boolean
+        val pendingFinish: Job?
         synchronized(this) {
             if (starting || status == RideStatus.RUNNING || status == RideStatus.PAUSED) return StartResult.AlreadyRunning
             starting = true
             stopRequested = false
             wasFinished = status == RideStatus.FINISHED
+            pendingFinish = finishJob
         }
         try {
+            // Join after taking the start flag (so a stop() during the wait is recorded) but outside the monitor:
+            // a restart must not reach rideLog.begin() while the previous ride is still finishing.
+            pendingFinish?.join()
             if (wasFinished) teardown()
             hub.acquire()                             // before any real suspension: the Activity may release its own hold any moment
             synchronized(this) { holdsHub = true }
