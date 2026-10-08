@@ -7,8 +7,12 @@ import dev.pedalmate.workout.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -272,5 +276,32 @@ class RideSessionTest {
         assertEquals(StartResult.Started, s.startWorkout("t"))
         assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
         assertEquals(2, bike.started)
+    }
+
+    @Test fun `begin joins the in-flight finish job before restarting`() = runTest(StandardTestDispatcher()) {
+        val gate = CompletableDeferred<Unit>()
+        val strict = object : RideLog {
+            var recording = false; var begins = 0; var finishes = 0; var beginWhileRecording = 0
+            override suspend fun begin(workoutId: String?, ftp: Int?): Long {
+                if (recording) { beginWhileRecording++; throw IllegalStateException("already recording") }
+                recording = true; begins++; return begins.toLong()
+            }
+            override fun offer(frame: RideFrame) {}
+            override suspend fun finish(): LiveAggregates? { gate.await(); recording = false; finishes++; return null }
+            override fun live(): LiveAggregates? = null
+        }
+        val s = RideSession(SensorHub(bike, hr), repo, strict, cues, { ftp }, backgroundScope)
+        assertEquals(StartResult.Started, s.startWorkout("t"))
+        s.tick(0); s.tick(1_000_000)                               // FINISHED; async finish launched but not run
+        val restart = async { s.startWorkout("t") }
+        runCurrent()
+        assertFalse(restart.isCompleted)                           // waiting on the finish job
+        assertEquals(1, strict.begins)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(StartResult.Started, restart.await())
+        assertEquals(0, strict.beginWhileRecording)
+        assertEquals(2, strict.begins); assertEquals(1, strict.finishes); assertTrue(strict.recording)
+        assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
     }
 }

@@ -52,6 +52,7 @@ class RideSession(
     private var lastTickMs: Long? = null
     private var freeElapsedMs = 0L
     private var cueJob: Job? = null
+    private var finishJob: Job? = null   // the async finish launched when a workout completes; begin() joins it
     private val smoother = PowerSmoother()
     private val tracker = TargetStatusTracker()
 
@@ -66,6 +67,8 @@ class RideSession(
     suspend fun startFreeRide(): StartResult = begin(null)
 
     private suspend fun begin(def: WorkoutDefinition?): StartResult {
+        // Join outside the lock: a restart must not reach rideLog.begin() while the previous ride is still finishing.
+        synchronized(this) { finishJob }?.join()
         val wasFinished: Boolean
         synchronized(this) {
             if (starting || status == RideStatus.RUNNING || status == RideStatus.PAUSED) return StartResult.AlreadyRunning
@@ -161,7 +164,7 @@ class RideSession(
         if (live) smoother.add(nowMs, hub.bike.metrics.value.powerWatts) else smoother.reset()
         if (status != RideStatus.FINISHED && e?.state?.value?.phase == WorkoutPhase.FINISHED) {
             status = RideStatus.FINISHED
-            scope.launch { safeFinish() }
+            finishJob = scope.launch { safeFinish() }
         }
         val snap = buildSnapshot(nowMs)
         if (status == RideStatus.RUNNING) {
