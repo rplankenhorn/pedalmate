@@ -1,6 +1,14 @@
 package dev.pedalmate.data
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
+import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import dev.pedalmate.heartrate.SavedHrDevice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,5 +60,32 @@ class SettingsHrDeviceStoreTest {
         assertNull(store.load())
         val s = withTimeout(2_000) { settings.settings.first { it.hrAddress == null } }
         assertNull(s.hrName)
+    }
+
+    @Test fun `unrelated settings emission before the write lands does not flicker back to the old device`() = runBlocking {
+        val gate = CompletableDeferred<Unit>()
+        val backing = MutableStateFlow<Preferences>(mutablePreferencesOf(stringPreferencesKey("hrAddress") to "AA:BB", stringPreferencesKey("hrName") to "A"))
+        val gated = object : DataStore<Preferences> {
+            override val data: Flow<Preferences> = backing
+            override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
+                gate.await()
+                return transform(backing.value).also { backing.value = it }
+            }
+        }
+        val store = SettingsHrDeviceStore(SettingsStore(gated), scope)
+        withTimeout(2_000) { while (store.load() != SavedHrDevice("AA:BB", "A")) delay(10) }
+
+        store.save(SavedHrDevice("CC:DD", "B"))
+        // Unrelated FTP edit lands first and still carries the old device A.
+        backing.value = mutablePreferencesOf(
+            stringPreferencesKey("hrAddress") to "AA:BB", stringPreferencesKey("hrName") to "A", intPreferencesKey("ftp") to 250,
+        )
+        delay(300)
+        assertEquals(SavedHrDevice("CC:DD", "B"), store.load())
+
+        gate.complete(Unit)
+        withTimeout(2_000) { while (backing.value[stringPreferencesKey("hrAddress")] != "CC:DD") delay(10) }
+        delay(100)
+        assertEquals(SavedHrDevice("CC:DD", "B"), store.load())
     }
 }
