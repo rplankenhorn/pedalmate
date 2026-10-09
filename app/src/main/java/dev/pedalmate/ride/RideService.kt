@@ -63,6 +63,7 @@ class RideService : Service() {
     private var overlayJob: Job? = null
     private val container get() = appContainer
     private var lastStartId = 0
+    private var lastRideStartId = 0               // id of the newest START command; main thread only
 
     /** How long a finished ride keeps the panel up before the service stops itself; tests shorten it. */
     @VisibleForTesting internal var finishedLingerMs: Long = FINISHED_LINGER_MS
@@ -146,7 +147,7 @@ class RideService : Service() {
         enterForeground()                         // the foreground contract comes first, whatever we decide next
         val session = container.session
         when (RideServicePolicy.decide(intent?.action, intent == null, session.isActive)) {
-            ServiceAction.START -> startRide(intent?.getStringExtra(EXTRA_WORKOUT_ID), startId)
+            ServiceAction.START -> { lastRideStartId = startId; startRide(intent?.getStringExtra(EXTRA_WORKOUT_ID), startId) }
             ServiceAction.CONTINUE -> ensureTicker()
             ServiceAction.REFRESH_OVERLAY -> { ensureTicker(); refreshOverlay() }
             ServiceAction.STOP, ServiceAction.STOP_SELF -> stopRide(startId)
@@ -192,14 +193,17 @@ class RideService : Service() {
     }
 
     /**
-     * Ends the ride, then the service, but only if no later command re-activated the session:
-     * [stopSelfResult] with this command's [startId] is a no-op when a newer start is queued.
+     * Ends the ride, then the service, but only if no later START is queued. A later REFRESH_OVERLAY or CONTINUE
+     * (delivered while the session was still active) must not keep the idle service alive, so the stop covers every
+     * command up to the newest one; a newer START is protected because [stopSelfResult] with this command's
+     * [startId] is a no-op when a newer start is queued.
      */
     private fun stopRide(startId: Int) {
         container.scope.launch {                  // app scope: survives this service being destroyed
             withContext(NonCancellable) { container.session.stop() }
             withContext(Dispatchers.Main.immediate) {
-                if (!container.session.isActive && stopSelfResult(startId)) {
+                val upTo = if (lastRideStartId > startId) startId else lastStartId
+                if (!container.session.isActive && stopSelfResult(upTo)) {
                     ticker?.cancel()
                     ticker = null
                     stopForeground(STOP_FOREGROUND_REMOVE)

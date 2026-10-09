@@ -133,4 +133,14 @@ class RideServiceTest {
         assertFalse(stoppedWith(1))
         assertFalse(stoppedWith(2))
     }
+
+    @Test fun `a refresh queued after stop does not leave the service running idle`() {
+        runBlocking { container.session.startFreeRide() }
+        assertTrue(container.session.isActive)
+        send(RideService.ACTION_STOP, 1)
+        send(RideService.ACTION_REFRESH_OVERLAY, 2)   // delivered while the session is still active
+        awaitUntil("service stopped with #2") { stoppedWith(2) }
+        assertFalse(container.session.isActive)
+        assertTrue(shadowOf(service as Service).isStoppedBySelf)
+    }
 }
