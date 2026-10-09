@@ -7,6 +7,7 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import dev.pedalmate.PedalMateApp
 import dev.pedalmate.data.AppContainer
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -33,6 +34,8 @@ class RideServiceTest {
     @After fun tearDown() {
         runBlocking { container.session.stop() }
         controller.destroy()
+        container.scope.cancel()                  // no coroutine may touch the DB after it closes
+        container.database.close()                // per-test container: release Room's connections (CloseGuard)
     }
 
     private fun send(action: String?, startId: Int, workoutId: String? = null): Int =
