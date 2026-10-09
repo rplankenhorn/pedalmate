@@ -44,6 +44,7 @@ class RideSession(
     private var status = RideStatus.IDLE
     private var starting = false
     private var stopRequested = false   // a stop() that arrived while begin() was suspended
+    private var stopsInFlight = 0       // stop() calls between entry and return; a begin() that starts in this window loses
     private var holdsHub = false
     private var engine: WorkoutEngine? = null
     private var workoutName: String? = null
@@ -70,6 +71,10 @@ class RideSession(
         val wasFinished: Boolean
         val pendingFinish: Job?
         synchronized(this) {
+            // A stop() that is already running was issued before this start could take the lock; honour it, since
+            // the stop has no other way to reach a begin() that has not set `starting` yet. Once the stop returns
+            // the window closes, so an old stop never poisons a later start.
+            if (stopsInFlight > 0) return StartResult.Stopped
             if (starting || status == RideStatus.RUNNING || status == RideStatus.PAUSED) return StartResult.AlreadyRunning
             starting = true
             stopRequested = false
@@ -177,8 +182,12 @@ class RideSession(
     }
 
     suspend fun stop() {
-        synchronized(this) { if (starting) stopRequested = true }
-        teardown()
+        synchronized(this) { stopsInFlight++; if (starting) stopRequested = true }
+        try {
+            teardown()
+        } finally {
+            synchronized(this) { stopsInFlight-- }
+        }
     }
 
     private suspend fun teardown() {

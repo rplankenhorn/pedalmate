@@ -304,4 +304,31 @@ class RideSessionTest {
         assertEquals(2, strict.begins); assertEquals(1, strict.finishes); assertTrue(strict.recording)
         assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
     }
+
+    @Test fun `a start that arrives while a stop is still running does not ride`() = runTest(StandardTestDispatcher()) {
+        val gate = CompletableDeferred<Unit>()
+        val slowFinish = object : RideLog by log {
+            override suspend fun finish(): LiveAggregates? { gate.await(); return log.finish() }
+        }
+        val s = RideSession(SensorHub(bike, hr), repo, slowFinish, cues, { ftp }, backgroundScope)
+        assertEquals(StartResult.Started, s.startWorkout("t"))
+        val stopping = launch { s.stop() }
+        runCurrent()                                               // stop() is parked inside the log finish
+        assertFalse(stopping.isCompleted)
+        val result = s.startWorkout("t")                           // begin() never took a lock before stop() began
+        gate.complete(Unit); advanceUntilIdle()                    // always release the parked stop, even if we fail below
+        assertEquals(StartResult.Stopped, result)
+        assertEquals(RideStatus.IDLE, s.snapshot.value.status); assertFalse(s.isActive)
+        assertEquals(1, log.begins.size)
+        assertEquals(bike.started, bike.stopped)
+    }
+
+    @Test fun `a stop that already completed does not poison a later start`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession()
+        s.stop()
+        assertEquals(StartResult.Started, s.startWorkout("t"))
+        assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
+        s.stop()
+        assertEquals(StartResult.Started, s.startFreeRide())
+    }
 }

@@ -186,7 +186,7 @@ class RideService : Service() {
             Log.i("PedalMate", "start ride workout=$workoutId result=$result")
             when (result) {
                 StartResult.UnknownWorkout -> stopRide(startId)
-                StartResult.Stopped -> Unit           // the STOP that interrupted us finishes the service itself
+                StartResult.Stopped -> withContext(Dispatchers.Main.immediate) { stopServiceIfIdle(startId) }   // a STOP beat us; its own stopSelf may have lost to this start's id
                 else -> withContext(Dispatchers.Main.immediate) { ensureTicker() }
             }
         }
@@ -201,14 +201,17 @@ class RideService : Service() {
     private fun stopRide(startId: Int) {
         container.scope.launch {                  // app scope: survives this service being destroyed
             withContext(NonCancellable) { container.session.stop() }
-            withContext(Dispatchers.Main.immediate) {
-                val upTo = if (lastRideStartId > startId) startId else lastStartId
-                if (!container.session.isActive && stopSelfResult(upTo)) {
-                    ticker?.cancel()
-                    ticker = null
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                }
-            }
+            withContext(Dispatchers.Main.immediate) { stopServiceIfIdle(startId) }
+        }
+    }
+
+    /** Main thread only. Stops the service unless the session is active or a START newer than [startId] is queued. */
+    private fun stopServiceIfIdle(startId: Int) {
+        val upTo = if (lastRideStartId > startId) startId else lastStartId
+        if (!container.session.isActive && stopSelfResult(upTo)) {
+            ticker?.cancel()
+            ticker = null
+            stopForeground(STOP_FOREGROUND_REMOVE)
         }
     }
 
