@@ -69,6 +69,9 @@ class RideService : Service() {
     /** How long a finished ride keeps the panel up before the service stops itself; tests shorten it. */
     @VisibleForTesting internal var finishedLingerMs: Long = FINISHED_LINGER_MS
 
+    /** Period of the elapsed-realtime ticker; tests shorten it so state that needs a tick settles fast. Set before the first start. */
+    @VisibleForTesting internal var tickerPeriodMs: Long = TICK_MS
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -233,7 +236,7 @@ class RideService : Service() {
                             "bike=${s.bikeState} watts=${s.smoothedPowerWatts} zone=${s.currentZone} target=${s.targetStatus}",
                     )
                 }
-                delay(TICK_MS)
+                delay(tickerPeriodMs)
             }
         }
     }

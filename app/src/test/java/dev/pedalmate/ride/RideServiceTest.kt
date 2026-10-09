@@ -7,6 +7,7 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import dev.pedalmate.PedalMateApp
 import dev.pedalmate.data.AppContainer
+import dev.pedalmate.workout.WorkoutPhase
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
@@ -51,26 +52,33 @@ class RideServiceTest {
             startId,
         )
 
+    /**
+     * Skips through every step of the workout, then waits for the session to publish FINISHED. Skips exactly
+     * `stepCount` times: the last one finishes the engine synchronously (phase FINISHED, same stepIndex), and only a
+     * later ticker tick flips the session status, so the loop never re-skips on a status it merely failed to observe.
+     */
     private fun finishWorkoutRide(startId: Int) {
+        service.tickerPeriodMs = 20               // the FINISHED status needs one tick; do not wait on the 250 ms production period
         send(RideService.ACTION_START, startId, "pz-43")
         awaitUntil("workout running") { container.session.snapshot.value.status == RideStatus.RUNNING }
-        var skips = 0
-        while (container.session.snapshot.value.status != RideStatus.FINISHED) {
-            check(++skips <= 20) { "workout did not finish after 20 skips" }
-            val stepBefore = container.session.snapshot.value.workout?.stepIndex
-            container.session.skip()
-            awaitUntil("skip #$skips to be published") {
-                val s = container.session.snapshot.value
-                s.status == RideStatus.FINISHED || s.workout?.stepIndex != stepBefore
+        val stepCount = checkNotNull(container.session.snapshot.value.workout).stepCount
+        repeat(stepCount) { i ->
+            val before = container.session.snapshot.value.workout?.stepIndex
+            container.session.skip()              // publishes synchronously from the engine, no tick involved
+            if (i < stepCount - 1) {
+                awaitUntil("skip #${i + 1} to be published") { container.session.snapshot.value.let { it.status != RideStatus.RUNNING || it.workout?.stepIndex != before } }
+                check(container.session.snapshot.value.status == RideStatus.RUNNING) { "session left RUNNING during skip #${i + 1}: ${container.session.snapshot.value.status}" }
             }
         }
+        awaitUntil("workout engine finished") { container.session.snapshot.value.workout?.phase == WorkoutPhase.FINISHED }
+        awaitUntil("session status FINISHED") { container.session.snapshot.value.status == RideStatus.FINISHED }
     }
 
     private fun awaitUntil(what: String, timeoutMs: Long = 15_000, cond: () -> Boolean) {
         val end = System.currentTimeMillis() + timeoutMs
         while (!cond()) {
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(50))   // also advances the paused SystemClock the ticker reads
-            check(System.currentTimeMillis() < end) { "timed out waiting for $what" }
+            check(System.currentTimeMillis() < end) { "timed out waiting for $what; snap=${container.session.snapshot.value.status} step=${container.session.snapshot.value.workout?.stepIndex} phase=${container.session.snapshot.value.workout?.phase}" }
             Thread.sleep(20)
         }
     }
