@@ -2,11 +2,13 @@ package dev.pedalmate.data
 
 import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import dev.pedalmate.audio.CuePlayer
 import dev.pedalmate.heartrate.HrPairing
 import dev.pedalmate.heartrate.SavedHrDeviceStore
 import dev.pedalmate.PedalMateApp
 import dev.pedalmate.ride.RideFinalizer
+import dev.pedalmate.ride.RideLog
 import dev.pedalmate.ride.RideRecorder
 import dev.pedalmate.ride.RideSession
 import dev.pedalmate.ride.SensorHub
@@ -47,12 +49,17 @@ class AppContainer(context: Context) {
         scope.launch { settings.settings.collect { currentFtp = it.ftp; ftpLoaded.complete(Unit) } }
     }
 
-    val session = RideSession(
-        hub = hub, workouts = workouts,
-        rideLog = RideRecorder(database.rideDao(), database.sampleDao(), { System.currentTimeMillis() }, scope),
-        cues = cuePlayer, ftpProvider = { currentFtp }, scope = scope,
-        ready = { finalizer.join(); ftpLoaded.await() },
-    )
+    /** Tests set this before the first [session] access (e.g. before a service binds to it) to record into a fake log. */
+    @VisibleForTesting internal var rideLogOverride: RideLog? = null
+
+    val session: RideSession by lazy {
+        RideSession(
+            hub = hub, workouts = workouts,
+            rideLog = rideLogOverride ?: RideRecorder(database.rideDao(), database.sampleDao(), { System.currentTimeMillis() }, scope),
+            cues = cuePlayer, ftpProvider = { currentFtp }, scope = scope,
+            ready = { finalizer.join(); ftpLoaded.await() },
+        )
+    }
 }
 
 val Context.appContainer: AppContainer get() = (applicationContext as PedalMateApp).container

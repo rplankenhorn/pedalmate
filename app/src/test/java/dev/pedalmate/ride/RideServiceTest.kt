@@ -31,7 +31,7 @@ import org.robolectric.annotation.Config
 class RideServiceTest {
     private val app = ApplicationProvider.getApplicationContext<Application>() as PedalMateApp
     private val container: AppContainer get() = app.container
-    private val controller: ServiceController<RideService> = Robolectric.buildService(RideService::class.java).create()
+    private val controller: ServiceController<RideService> by lazy { Robolectric.buildService(RideService::class.java).create() }   // lazy: a test may swap the ride log first
     private val service: RideService get() = controller.get()
 
     @After fun tearDown() {
@@ -115,17 +115,10 @@ class RideServiceTest {
         override fun live(): LiveAggregates? = null
     }
 
-    /** Swaps the container's session for one over [log]; the service reads `container.session` per command. */
-    private fun useLog(log: RideLog) {
-        val c = container
-        val session = RideSession(c.hub, c.workouts, log, c.cuePlayer, { null }, c.scope)
-        AppContainer::class.java.getDeclaredField("session").apply { isAccessible = true }.set(c, session)
-    }
-
     @Test fun `a start right behind a stop waits for the finish then rides recorded`() {
         val gate = CompletableDeferred<Unit>()
         val log = GatedLog(gate)
-        useLog(log)
+        container.rideLogOverride = log           // before the service binds its collectors to container.session
         runBlocking { container.session.startFreeRide() }
         assertEquals(1, log.begins.get())
         send(RideService.ACTION_STOP, 1)
