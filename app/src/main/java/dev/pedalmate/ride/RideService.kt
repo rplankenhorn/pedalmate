@@ -202,7 +202,7 @@ class RideService : Service() {
      * [startId] is a no-op when a newer start is queued.
      */
     private fun stopRide(startId: Int) {          // main thread only (writes pendingStop)
-        pendingStop = container.scope.launch {                  // app scope: survives this service being destroyed
+        pendingStop = container.scope.launch {    // app scope: survives this service being destroyed
             withContext(NonCancellable) { container.session.stop() }
             withContext(Dispatchers.Main.immediate) { stopServiceIfIdle(startId) }
         }

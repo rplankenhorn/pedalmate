@@ -83,6 +83,7 @@ class RideServiceTest {
         send(RideService.ACTION_START, 2)
         awaitUntil("ride running") { container.session.snapshot.value.status == RideStatus.RUNNING }
         assertTrue(container.session.isActive)
+        assertTrue("stop #1 completed and stopped with its own id", stoppedWith(1))
         assertFalse("the stale stop #1 must not be the last stop", stoppedWith(2))
     }
 
@@ -124,10 +125,12 @@ class RideServiceTest {
         awaitUntil("finish to be entered") { log.finishEntered }
         assertEquals(1, log.begins.get())          // the start has not begun while the stop is running
         gate.complete(Unit)
-        awaitUntil("new ride running") { log.begins.get() == 2 && container.session.snapshot.value.status == RideStatus.RUNNING }
+        awaitUntil("new ride running") { log.beginWhileRecording.get() > 0 || (log.begins.get() == 2 && container.session.snapshot.value.status == RideStatus.RUNNING) }
+        assertEquals("begin while recording", 0, log.beginWhileRecording.get())
         assertTrue(container.session.isActive)
         assertEquals(1, log.finishes.get())
         assertEquals(0, log.beginWhileRecording.get())
+        assertTrue("stop #1 completed and stopped with its own id", stoppedWith(1))
         assertFalse("the stale stop #1 must not stop the service for the new ride", stoppedWith(2))
     }
 
