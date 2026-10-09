@@ -7,8 +7,10 @@ import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import dev.pedalmate.PedalMateApp
 import dev.pedalmate.data.AppContainer
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,7 +36,7 @@ class RideServiceTest {
     @After fun tearDown() {
         runBlocking { container.session.stop() }
         controller.destroy()
-        container.scope.cancel()                  // no coroutine may touch the DB after it closes
+        container.scope.cancel()                  // async: it only requests cancellation; a NonCancellable stop may still reach a closed DB, which RideRecorder catches
         container.database.close()                // per-test container: release Room's connections (CloseGuard)
     }
 
@@ -82,6 +84,51 @@ class RideServiceTest {
         awaitUntil("ride running") { container.session.snapshot.value.status == RideStatus.RUNNING }
         assertTrue(container.session.isActive)
         assertFalse("the stale stop #1 must not be the last stop", stoppedWith(2))
+    }
+
+    /** Counts begins/finishes, fails on a begin while recording, and parks the first finish on [gate]. */
+    private class GatedLog(val gate: CompletableDeferred<Unit>) : RideLog {
+        @Volatile var recording = false
+        val begins = AtomicInteger(); val finishes = AtomicInteger(); val beginWhileRecording = AtomicInteger()
+        @Volatile var finishEntered = false
+        override suspend fun begin(workoutId: String?, ftp: Int?): Long {
+            if (recording) { beginWhileRecording.incrementAndGet(); throw IllegalStateException("already recording") }
+            recording = true
+            return begins.incrementAndGet().toLong()
+        }
+        override fun offer(frame: RideFrame) {}
+        override suspend fun finish(): LiveAggregates? {
+            finishEntered = true
+            gate.await()
+            recording = false; finishes.incrementAndGet()
+            return null
+        }
+        override fun live(): LiveAggregates? = null
+    }
+
+    /** Swaps the container's session for one over [log]; the service reads `container.session` per command. */
+    private fun useLog(log: RideLog) {
+        val c = container
+        val session = RideSession(c.hub, c.workouts, log, c.cuePlayer, { null }, c.scope)
+        AppContainer::class.java.getDeclaredField("session").apply { isAccessible = true }.set(c, session)
+    }
+
+    @Test fun `a start right behind a stop waits for the finish then rides recorded`() {
+        val gate = CompletableDeferred<Unit>()
+        val log = GatedLog(gate)
+        useLog(log)
+        runBlocking { container.session.startFreeRide() }
+        assertEquals(1, log.begins.get())
+        send(RideService.ACTION_STOP, 1)
+        send(RideService.ACTION_START, 2)          // the finish is still gated
+        awaitUntil("finish to be entered") { log.finishEntered }
+        assertEquals(1, log.begins.get())          // the start has not begun while the stop is running
+        gate.complete(Unit)
+        awaitUntil("new ride running") { log.begins.get() == 2 && container.session.snapshot.value.status == RideStatus.RUNNING }
+        assertTrue(container.session.isActive)
+        assertEquals(1, log.finishes.get())
+        assertEquals(0, log.beginWhileRecording.get())
+        assertFalse("the stale stop #1 must not stop the service for the new ride", stoppedWith(2))
     }
 
     @Test fun `start then stop ends idle and stops with the stop startId`() {

@@ -64,6 +64,7 @@ class RideService : Service() {
     private val container get() = appContainer
     private var lastStartId = 0
     private var lastRideStartId = 0               // id of the newest START command; main thread only
+    private var pendingStop: Job? = null          // the newest stop; main thread only. A START waits for it before beginning
 
     /** How long a finished ride keeps the panel up before the service stops itself; tests shorten it. */
     @VisibleForTesting internal var finishedLingerMs: Long = FINISHED_LINGER_MS
@@ -180,12 +181,14 @@ class RideService : Service() {
     }
 
     private fun startRide(workoutId: String?, startId: Int) {
+        val priorStop = pendingStop               // captured on main, so only a stop issued before this START is awaited
         scope.launch {
+            priorStop?.join()                     // STOP then START: let the finish land, then begin the new ride recorded
             val s = container.session
             val result = if (workoutId == null) s.startFreeRide() else s.startWorkout(workoutId)
             Log.i("PedalMate", "start ride workout=$workoutId result=$result")
             when (result) {
-                StartResult.UnknownWorkout -> stopRide(startId)
+                StartResult.UnknownWorkout -> withContext(Dispatchers.Main.immediate) { stopRide(startId) }   // pendingStop is main-only
                 StartResult.Stopped -> withContext(Dispatchers.Main.immediate) { stopServiceIfIdle(startId) }   // a STOP beat us; its own stopSelf may have lost to this start's id
                 else -> withContext(Dispatchers.Main.immediate) { ensureTicker() }
             }
@@ -198,8 +201,8 @@ class RideService : Service() {
      * command up to the newest one; a newer START is protected because [stopSelfResult] with this command's
      * [startId] is a no-op when a newer start is queued.
      */
-    private fun stopRide(startId: Int) {
-        container.scope.launch {                  // app scope: survives this service being destroyed
+    private fun stopRide(startId: Int) {          // main thread only (writes pendingStop)
+        pendingStop = container.scope.launch {                  // app scope: survives this service being destroyed
             withContext(NonCancellable) { container.session.stop() }
             withContext(Dispatchers.Main.immediate) { stopServiceIfIdle(startId) }
         }
