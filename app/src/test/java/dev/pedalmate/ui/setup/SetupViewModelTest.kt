@@ -308,14 +308,86 @@ class SetupViewModelTest {
         assertTrue(v.start() is StartDecision.Started)
     }
 
+    private val lichess = "org.lichess.mobileV2"
+
     @Test
-    fun `launch button`() = runTest {
+    fun `launch while idle asks to confirm instead of launching`() = runTest {
         val v = vm()
-        assertEquals("org.lichess.mobileV2", v.onLaunchLichessRequested())
+        assertEquals(LaunchDecision.AskConfirm, v.onLaunchLichessRequested())
+        assertTrue(v.state.value.confirmLaunch)
+        assertTrue(commands.started.isEmpty())
+        assertNull(v.state.value.message)
+    }
+
+    @Test
+    fun `launch while running or paused launches at once`() = runTest {
+        val v = vm()
+        for (st in listOf(RideStatus.RUNNING, RideStatus.PAUSED)) {
+            snapshot.value = RideSnapshot.idle(250).copy(status = st)
+            assertEquals(LaunchDecision.Launch(lichess), v.onLaunchLichessRequested())
+            assertFalse(v.state.value.confirmLaunch)
+        }
         assertNull(v.state.value.message)
         installed = emptySet()
-        assertNull(v.onLaunchLichessRequested())
+        assertEquals(LaunchDecision.Launch(null), v.onLaunchLichessRequested())
         assertTrue(v.state.value.message!!.contains("Lichess not found"))
+    }
+
+    @Test
+    fun `confirm start and launch starts the free ride then returns the package`() = runTest {
+        val v = vm()
+        v.select(FREE_RIDE_ID)
+        v.onLaunchLichessRequested()
+        assertEquals(StartDecision.Started(lichess), v.confirmStartAndLaunch())
+        assertEquals(listOf<String?>(null), commands.started)
+        assertFalse(v.state.value.confirmLaunch)
+    }
+
+    @Test
+    fun `confirm start and launch uses the selected workout`() = runTest {
+        val v = vm()
+        v.select("t2")
+        v.onLaunchLichessRequested()
+        assertEquals(StartDecision.Started(lichess), v.confirmStartAndLaunch())
+        assertEquals(listOf<String?>("t2"), commands.started)
+    }
+
+    @Test
+    fun `confirm launch only launches without a ride`() = runTest {
+        val v = vm()
+        v.onLaunchLichessRequested()
+        assertEquals(lichess, v.confirmLaunchOnly())
+        assertFalse(v.state.value.confirmLaunch)
+        assertTrue(commands.started.isEmpty())
+        assertNull(v.state.value.message)
+    }
+
+    @Test
+    fun `confirm launch only without Lichess says so`() = runTest {
+        installed = emptySet()
+        val v = vm()
+        v.onLaunchLichessRequested()
+        assertNull(v.confirmLaunchOnly())
+        assertTrue(v.state.value.message!!.contains("Lichess not found"))
+        assertFalse(v.state.value.confirmLaunch)
+    }
+
+    @Test
+    fun `dismiss launch confirm clears the flag`() = runTest {
+        val v = vm()
+        v.onLaunchLichessRequested()
+        assertTrue(v.state.value.confirmLaunch)
+        v.dismissLaunchConfirm()
+        assertFalse(v.state.value.confirmLaunch)
+    }
+
+    @Test
+    fun `launch confirm hides once the ride is active`() = runTest {
+        val v = vm()
+        v.onLaunchLichessRequested()
+        assertTrue(v.state.value.confirmLaunch)
+        snapshot.value = RideSnapshot.idle(250).copy(status = RideStatus.RUNNING)
+        assertFalse(v.state.value.confirmLaunch)
     }
 
     @Test
