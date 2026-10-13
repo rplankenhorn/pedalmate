@@ -391,6 +391,36 @@ class SetupViewModelTest {
     }
 
     @Test
+    fun `launch while finished asks to confirm`() = runTest {
+        val v = vm()
+        snapshot.value = RideSnapshot.idle(250).copy(status = RideStatus.FINISHED)
+        assertEquals(LaunchDecision.AskConfirm, v.onLaunchLichessRequested())
+        assertTrue(v.state.value.confirmLaunch)
+    }
+
+    @Test
+    fun `plain start clears the open launch confirm`() = runTest {
+        val v = vm()
+        v.onLaunchLichessRequested()
+        assertTrue(v.start() is StartDecision.Started)
+        assertEquals(1, commands.started.size)
+        snapshot.value = RideSnapshot.idle(250).copy(status = RideStatus.RUNNING)
+        assertFalse(v.state.value.confirmLaunch)
+        snapshot.value = RideSnapshot.idle(250).copy(status = RideStatus.FINISHED)
+        assertFalse(v.state.value.confirmLaunch)
+    }
+
+    @Test
+    fun `confirm start and launch while blocked returns Blocked and clears the flag`() = runTest {
+        val v = vm()
+        v.onLaunchLichessRequested()
+        v.onFtpTextChanged("49")
+        assertEquals(StartDecision.Blocked("Fix the FTP value first"), v.confirmStartAndLaunch())
+        assertFalse(v.state.value.confirmLaunch)
+        assertTrue(commands.started.isEmpty())
+    }
+
+    @Test
     fun `showMessage publishes and dismiss clears`() = runTest {
         val v = vm()
         v.showMessage("hello")

@@ -162,13 +162,13 @@ class SetupViewModel(
     suspend fun start(): StartDecision {
         val s = state.value
         s.startBlockedReason?.let { reason -> Log.i("PedalMate", "START RIDE blocked: $reason"); say(reason); return StartDecision.Blocked(reason) }
+        local.update { it.copy(confirmLaunch = false) }
         val id = s.selectedId
         commands.start(if (id == FREE_RIDE_ID) null else id)
         Log.i("PedalMate", "START RIDE dispatched workout=$id status=${s.rideStatus}")
         viewModelScope.launch { settings.setLastWorkoutId(id) }
-        val pkg = LichessLauncher.resolve(settings.settings.first().lichessPackage, isInstalled)
+        val pkg = resolveLichess()
         Log.i("PedalMate", "START RIDE launching lichess=$pkg")
-        if (pkg == null) say(LICHESS_MISSING)
         return StartDecision.Started(pkg)
     }
 
