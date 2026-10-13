@@ -147,6 +147,7 @@ class RideService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i("PedalMate", "onStartCommand action=${intent?.action} startId=$startId sessionActive=${container.session.isActive}")
         lastStartId = startId
         enterForeground()                         // the foreground contract comes first, whatever we decide next
         val session = container.session
@@ -264,6 +265,7 @@ class RideService : Service() {
         fun start(context: Context, workoutId: String?) {
             val i = Intent(context, RideService::class.java).setAction(ACTION_START)
             if (workoutId != null) i.putExtra(EXTRA_WORKOUT_ID, workoutId)
+            Log.i("PedalMate", "dispatching START workout=$workoutId")
             ContextCompat.startForegroundService(context, i)
         }
 

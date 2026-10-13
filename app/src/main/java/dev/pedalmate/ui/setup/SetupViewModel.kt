@@ -1,5 +1,6 @@
 package dev.pedalmate.ui.setup
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -150,11 +151,13 @@ class SetupViewModel(
     /** Starts the selected ride unless blocked; the caller launches Lichess when the result carries a package. */
     suspend fun start(): StartDecision {
         val s = state.value
-        s.startBlockedReason?.let { reason -> say(reason); return StartDecision.Blocked(reason) }
+        s.startBlockedReason?.let { reason -> Log.i("PedalMate", "START RIDE blocked: $reason"); say(reason); return StartDecision.Blocked(reason) }
         val id = s.selectedId
         commands.start(if (id == FREE_RIDE_ID) null else id)
+        Log.i("PedalMate", "START RIDE dispatched workout=$id status=${s.rideStatus}")
         viewModelScope.launch { settings.setLastWorkoutId(id) }
         val pkg = LichessLauncher.resolve(settings.settings.first().lichessPackage, isInstalled)
+        Log.i("PedalMate", "START RIDE launching lichess=$pkg")
         if (pkg == null) say(LICHESS_MISSING)
         return StartDecision.Started(pkg)
     }
@@ -162,6 +165,7 @@ class SetupViewModel(
     /** The package to launch for the standalone LAUNCH LICHESS button, or null (with a message) when not installed. */
     suspend fun onLaunchLichessRequested(): String? {
         val pkg = LichessLauncher.resolve(settings.settings.first().lichessPackage, isInstalled)
+        Log.i("PedalMate", "LAUNCH LICHESS tapped status=${state.value.rideStatus} lichess=$pkg")
         if (pkg == null) say(LICHESS_MISSING)
         return pkg
     }
