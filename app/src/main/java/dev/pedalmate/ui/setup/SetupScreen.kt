@@ -55,6 +55,9 @@ data class SetupActions(
     val onResume: () -> Unit,
     val onSkip: () -> Unit,
     val onLaunchLichess: () -> Unit,
+    val onConfirmStartAndLaunch: () -> Unit,
+    val onConfirmLaunchOnly: () -> Unit,
+    val onDismissLaunchConfirm: () -> Unit,
     val onFixPermission: (PermissionItem) -> Unit,
     val onPackageChange: (String) -> Unit,
     val onDismissMessage: () -> Unit,
@@ -173,7 +176,18 @@ private fun RightColumn(state: SetupUiState, hr: HrCardState, pairing: PairingSt
         if (pairing != PairingState.Idle) {
             HrPairingPanel(pairing, state.hrDeviceLabel, actions.onScanHr, actions.onPickStrap, actions.onForgetHr, actions.onClosePairing)
         }
-        Button(onClick = actions.onLaunchLichess) { Text("LAUNCH LICHESS") }
+        if (state.confirmLaunch) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("No ride is recording. Launch Lichess anyway?", color = amber, fontSize = 18.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = actions.onConfirmStartAndLaunch, enabled = state.canStart) { Text("START RIDE AND LAUNCH") }
+                    OutlinedButton(onClick = actions.onConfirmLaunchOnly) { Text("LAUNCH ONLY") }
+                    TextButton(onClick = actions.onDismissLaunchConfirm) { Text("CANCEL") }
+                }
+            }
+        } else {
+            Button(onClick = actions.onLaunchLichess) { Text("LAUNCH LICHESS") }
+        }
         TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "ADVANCED (hide)" else "ADVANCED") }
         if (advanced) {
             OutlinedTextField(

@@ -67,7 +67,20 @@ class SetupActivity : ComponentActivity() {
             onPause = vm::pause,
             onResume = vm::resume,
             onSkip = vm::skip,
-            onLaunchLichess = { lifecycleScope.launch { vm.onLaunchLichessRequested()?.let(::launchLichess) } },
+            onLaunchLichess = {
+                lifecycleScope.launch {
+                    val d = vm.onLaunchLichessRequested()
+                    if (d is LaunchDecision.Launch && d.lichessPackage != null) launchLichess(d.lichessPackage)
+                }
+            },
+            onConfirmStartAndLaunch = {
+                lifecycleScope.launch {
+                    val d = vm.confirmStartAndLaunch()
+                    if (d is StartDecision.Started && d.lichessPackage != null) launchLichess(d.lichessPackage)
+                }
+            },
+            onConfirmLaunchOnly = { lifecycleScope.launch { vm.confirmLaunchOnly()?.let(::launchLichess) } },
+            onDismissLaunchConfirm = vm::dismissLaunchConfirm,
             onFixPermission = ::fixPermission,
             onPackageChange = vm::onLichessPackageChanged,
             onDismissMessage = vm::dismissMessage,

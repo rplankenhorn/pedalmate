@@ -54,12 +54,20 @@ data class SetupUiState(
     val showWorkoutControls: Boolean,
     val hrDeviceLabel: String?,
     val message: String?,
+    /** Inline confirmation for LAUNCH LICHESS while no ride is recording. */
+    val confirmLaunch: Boolean,
 )
 
 /** Outcome of [SetupViewModel.start]. */
 sealed interface StartDecision {
     data class Started(val lichessPackage: String?) : StartDecision
     data class Blocked(val reason: String) : StartDecision
+}
+
+/** Outcome of [SetupViewModel.onLaunchLichessRequested]; `Launch(null)` means Lichess is not installed (already said). */
+sealed interface LaunchDecision {
+    data object AskConfirm : LaunchDecision
+    data class Launch(val lichessPackage: String?) : LaunchDecision
 }
 
 /** Holds all setup-screen decisions: FTP validation, workout selection, start gating, Lichess resolution. */
@@ -75,6 +83,7 @@ class SetupViewModel(
         val selected: String? = null,
         val pkgEdit: String? = null,
         val message: String? = null,
+        val confirmLaunch: Boolean = false,
         val overlayGranted: Boolean = true,   // optimistic until the Activity reports, so no warning flashes
     )
 
@@ -118,6 +127,7 @@ class SetupViewModel(
             },
             showWorkoutControls = active && snap.workoutName != null,
             hrDeviceLabel = hrLabel, message = l.message,
+            confirmLaunch = l.confirmLaunch && !active,
         )
     }
 
@@ -162,10 +172,38 @@ class SetupViewModel(
         return StartDecision.Started(pkg)
     }
 
-    /** The package to launch for the standalone LAUNCH LICHESS button, or null (with a message) when not installed. */
-    suspend fun onLaunchLichessRequested(): String? {
+    /** Launches at once during a ride; otherwise asks the screen to show the inline confirmation. */
+    suspend fun onLaunchLichessRequested(): LaunchDecision {
+        val status = state.value.rideStatus
+        if (status != RideStatus.RUNNING && status != RideStatus.PAUSED) {
+            local.update { it.copy(confirmLaunch = true) }
+            Log.i("PedalMate", "LAUNCH LICHESS asked to confirm status=$status")
+            return LaunchDecision.AskConfirm
+        }
+        val pkg = resolveLichess()
+        Log.i("PedalMate", "LAUNCH LICHESS tapped status=$status lichess=$pkg")
+        return LaunchDecision.Launch(pkg)
+    }
+
+    /** Confirmation choice: run the normal start path; the caller launches Lichess from the result. */
+    suspend fun confirmStartAndLaunch(): StartDecision {
+        local.update { it.copy(confirmLaunch = false) }
+        Log.i("PedalMate", "LAUNCH LICHESS confirmed with START RIDE")
+        return start()
+    }
+
+    /** Confirmation choice: launch without a ride. Returns the package, or null (with a message) when not installed. */
+    suspend fun confirmLaunchOnly(): String? {
+        local.update { it.copy(confirmLaunch = false) }
+        val pkg = resolveLichess()
+        Log.i("PedalMate", "LAUNCH LICHESS confirmed without ride lichess=$pkg")
+        return pkg
+    }
+
+    fun dismissLaunchConfirm() = local.update { it.copy(confirmLaunch = false) }
+
+    private suspend fun resolveLichess(): String? {
         val pkg = LichessLauncher.resolve(settings.settings.first().lichessPackage, isInstalled)
-        Log.i("PedalMate", "LAUNCH LICHESS tapped status=${state.value.rideStatus} lichess=$pkg")
         if (pkg == null) say(LICHESS_MISSING)
         return pkg
     }
