@@ -55,4 +55,9 @@ Result: PASS (2026-10-04)  Notes:
 ```
 - Foreground service kept logging status every 5 s after a ride reached FINISHED (observed ~19 h later, bead pedalmate-815): fixed in 49c4e7b, the service now stops itself 120 s after FINISHED while the panel shows "Done" (emulator smoke: stop logged at 120 s, service and overlay gone). Resolved.
 - Polish shipped in build 1369dc8: HR connect fast-fail on link failure, pill touch target >= 48 dp (dfb0466), mock flavor label "PedalMate (mock)" (cee041c). Build 49c4e7b adds the post-finish auto-stop (pedalmate-815) and test-summary logging (pedalmate-j3y).
-Result: PARTIAL (2026-10-07, head 49c4e7b) - remaining: HR pairing with HeartCast on the bike, overlay tap-through during a real Lichess move, HR reconnect after the phone sleeps.
+Result: PARTIAL (2026-10-13, head 4c97e8c) - remaining: HR pairing with HeartCast on the bike, overlay tap-through during a real Lichess move, HR reconnect after the phone sleeps.
+  - 2026-10-13 morning ride on ade2e34: user rode a free ride with HeartCast paired and no overlay appeared. Device evidence shows RideService never received START (no start log, no DB ride, no service, no crash); user cannot confirm whether START RIDE or LAUNCH LICHESS was tapped. adb repro of START RIDE on the idle bike worked (panel shown). Stage 2 items (HR reconnect, tap-through, Done + auto-stop) remain untested.
+  - R6 (e25b9cb, bead pedalmate-i8j): Log.i at every START boundary (ViewModel start decision incl. blocked reason, LAUNCH LICHESS tap, RideService.start dispatch, onStartCommand action/startId). Bike smoke on e25b9cb showed the full chain.
+  - R7 (65527c7 + 4c97e8c, bead pedalmate-mvd): LAUNCH LICHESS while no ride is active shows an inline confirm panel (START RIDE AND LAUNCH / LAUNCH ONLY / CANCEL); verified on the bike 2026-10-13 (panel, CANCEL, START RIDE AND LAUNCH -> ride + Lichess).
+  - Bike installed build: 4c97e8c (lastUpdateTime 2026-10-13 11:09:08 bike clock).
+  - Flake bead pedalmate-7ft reopened (RideServiceTest linger test failed once on the R7 full run).
