@@ -15,9 +15,7 @@ import android.view.WindowManager
 import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import dev.pedalmate.R
 import dev.pedalmate.data.appContainer
@@ -58,7 +56,6 @@ class RideService : Service() {
     private var ticker: Job? = null
     private lateinit var overlay: OverlayController
     private lateinit var prefs: OverlayPrefs
-    private var minimized by mutableStateOf(false)
     private lateinit var toast: IntervalToast
     private var overlayJob: Job? = null
     private val container get() = appContainer
@@ -101,7 +98,6 @@ class RideService : Service() {
             }
         }
         overlayJob = uiScope.launch {
-            minimized = prefs.load().minimized
             container.session.snapshot
                 .map { OverlayPolicy.directive(it.status) }
                 .distinctUntilChanged()
@@ -121,7 +117,7 @@ class RideService : Service() {
             content = {
                 val model by remember { container.session.snapshot.map { OverlayUiModel.from(it) } }
                     .collectAsState(initial = OverlayUiModel.from(container.session.snapshot.value))
-                OverlayContent(model, minimized) { toggleMinimized() }
+                OverlayContent(model, onOpenApp = ::openApp)
             },
             initial = saved.placement,
             onMoved = { p -> container.scope.launch { prefs.setPlacement(p) } },
@@ -140,10 +136,13 @@ class RideService : Service() {
         }
     }
 
-    private fun toggleMinimized() {
-        minimized = !minimized
-        val m = minimized
-        container.scope.launch { prefs.setMinimized(m) }
+    /**
+     * Overlay button: bring the existing [SetupActivity] to the front. The one place to swap the mechanism if the
+     * bike OS blocks the background start ("Background activity launch blocked"): fire a PendingIntent.getActivity instead.
+     */
+    private fun openApp() {
+        runCatching { startActivity(SetupActivity.bringToFrontIntent(this)) }
+            .onFailure { Log.w("PedalMate", "open app from overlay failed", it) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -163,7 +162,7 @@ class RideService : Service() {
     private fun enterForeground() {
         val stop = PendingIntent.getService(this, 0, stopIntent(this), PendingIntent.FLAG_IMMUTABLE)
         val open = PendingIntent.getActivity(
-            this, 1, Intent(this, SetupActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            this, 1, SetupActivity.bringToFrontIntent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val n = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher)

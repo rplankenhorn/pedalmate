@@ -1,12 +1,12 @@
 package dev.pedalmate.overlay
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,8 +20,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -31,8 +34,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.pedalmate.workout.PowerZone
 
-/** Minimum pill size in overlay dp (the controller treats this as the practical touch-target floor). */
-internal val PillMinTouchTarget = 48.dp
+/** Size of the round Open PedalMate button in overlay dp. */
+internal val OpenAppButtonSize = 32.dp
 
 private val PanelBackground = Color(0xD1000000)
 private val IntervalYellow = ZoneColors.Paused
@@ -40,25 +43,24 @@ private val LabelGrey = Color(0xFF9B9B9B)
 private val AvgBestGrey = Color(0xFF8F8F8F)
 private val Divider = Color(0x33FFFFFF)
 
-/** Ride overlay: an expanded Peloton-style panel, or a one-line pill when [minimized]. Tapping toggles via [onToggle]. */
+/** Ride overlay: always the expanded Peloton-style panel. Tapping the panel body does nothing; the button calls [onOpenApp]. */
 @Composable
-fun OverlayContent(model: OverlayUiModel, minimized: Boolean, onToggle: () -> Unit) {
+fun OverlayContent(model: OverlayUiModel, onOpenApp: () -> Unit) {
     val base = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides remember(base) { base.scaledForOverlay() }) {
-        if (minimized) Pill(model, onToggle) else Panel(model, onToggle)
+        Panel(model, onOpenApp)
     }
 }
 
 @Composable
-private fun Panel(model: OverlayUiModel, onToggle: () -> Unit) {
+private fun Panel(model: OverlayUiModel, onOpenApp: () -> Unit) {
     Column(
         Modifier.width(640.dp)
             .background(PanelBackground, RoundedCornerShape(14.dp))
-            .clickable(onClick = onToggle)
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        IntervalStrip(model)
+        IntervalStrip(model, onOpenApp)
         Box(Modifier.fillMaxWidth().height(1.dp).background(Divider))
         if (model.banner != null) {
             Text(model.banner, color = ZoneColors.Above, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -71,13 +73,29 @@ private fun Panel(model: OverlayUiModel, onToggle: () -> Unit) {
 }
 
 @Composable
-private fun IntervalStrip(model: OverlayUiModel) {
+private fun IntervalStrip(model: OverlayUiModel, onOpenApp: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(model.intervalName, color = IntervalYellow, fontSize = 18.sp, fontWeight = FontWeight.Medium)
         if (model.intervalTime != null) {
             Text(model.intervalTime, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Light)
         }
         if (model.nextText != null) Text(model.nextText, color = LabelGrey, fontSize = 14.sp)
+        OpenAppButton(onOpenApp)
+    }
+}
+
+/** Icon-only button (app-icon-style rounded square) that brings PedalMate to the front. */
+@Composable
+private fun OpenAppButton(onClick: () -> Unit) {
+    Box(
+        Modifier.size(OpenAppButtonSize)
+            .background(Color(0x33FFFFFF), CircleShape)
+            .clip(CircleShape)
+            .clickable(onClickLabel = "Open PedalMate", onClick = onClick)
+            .semantics { contentDescription = "Open PedalMate" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(18.dp).border(2.dp, Color.White, RoundedCornerShape(5.dp)))
     }
 }
 
@@ -147,25 +165,4 @@ private fun Metric(label: String, value: String, unit: String) {
         },
         fontSize = 13.sp,
     )
-}
-
-@Composable
-private fun Pill(model: OverlayUiModel, onToggle: () -> Unit) {
-    Row(
-        // min size first: background and clickable then both span it, so the whole pill is the hit area
-        Modifier.defaultMinSize(minWidth = PillMinTouchTarget, minHeight = PillMinTouchTarget)
-            .background(PanelBackground, RoundedCornerShape(20.dp))
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(Modifier.size(14.dp).background(ZoneColors.of(model.zone), CircleShape))
-        Text(
-            model.pillText,
-            color = if (model.banner != null) ZoneColors.Above else Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Light,
-        )
-    }
 }

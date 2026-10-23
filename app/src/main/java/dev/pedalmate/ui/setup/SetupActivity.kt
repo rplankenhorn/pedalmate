@@ -1,6 +1,7 @@
 package dev.pedalmate.ui.setup
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -183,5 +184,11 @@ class SetupActivity : ComponentActivity() {
 
     private fun launchLichess(pkg: String) {
         packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    companion object {
+        /** Brings the running instance to the front (no second copy): used by the overlay button and the ride notification. */
+        fun bringToFrontIntent(context: Context): Intent = Intent(context, SetupActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
     }
 }
