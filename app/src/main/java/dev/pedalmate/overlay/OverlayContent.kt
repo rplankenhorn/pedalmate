@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.pedalmate.workout.PowerZone
 
-/** Size of the round Open PedalMate button in overlay dp: ~32 device dp at OVERLAY_SCALE 0.58, as in the approved mockup. */
+/** Size of the round Open PedalMate button in overlay dp: ~28 device dp (~42 px on the bike) at OVERLAY_SCALE 0.58; chosen to keep the approved mockup's button:panel proportion. */
 internal val OpenAppButtonSize = 48.dp
 
 private val PanelBackground = Color(0xD1000000)
