@@ -41,8 +41,8 @@ class OverlayGeometryTest {
     private fun re(x: Int, y: Int, prevW: Int, newW: Int, prevH: Int = 200, newH: Int = 200) =
         OverlayGeometry.reanchor(OverlayPosition(x, y), prevW, prevH, newW, newH, sw, sh)
 
-    @Test fun reanchorPanelToPillKeepsVerticalCentre() = assertEquals(518, re(1680, 390, 640, 240, prevH = 300, newH = 44).y)
-    @Test fun reanchorPillToPanelKeepsVerticalCentre() = assertEquals(390, re(1680, 518, 240, 640, prevH = 44, newH = 300).y)
+    @Test fun reanchorShrinkKeepsVerticalCentre() = assertEquals(518, re(1680, 390, 640, 240, prevH = 300, newH = 44).y)
+    @Test fun reanchorGrowKeepsVerticalCentre() = assertEquals(390, re(1680, 518, 240, 640, prevH = 44, newH = 300).y)
     @Test fun reanchorVerticalCentreClampsAtBottom() = assertEquals(780, re(1680, 1000, 240, 640, prevH = 44, newH = 300).y)
     @Test fun reanchorVerticalCentreClampsAtTop() = assertEquals(0, re(1680, 0, 240, 640, prevH = 44, newH = 300).y)
 

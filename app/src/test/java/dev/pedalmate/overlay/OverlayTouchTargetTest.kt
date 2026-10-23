@@ -14,7 +14,6 @@ import androidx.test.core.app.ApplicationProvider
 import dev.pedalmate.ride.RideSnapshot
 import dev.pedalmate.ui.setup.SetupActivity
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -23,7 +22,7 @@ import org.robolectric.Shadows.shadowOf
 
 /**
  * Drives real MotionEvents through the composed panel (no compose ui-test dependency in this project).
- * Runs at a large base density (10) so the 32 dp button dominates Robolectric's fixed ~36 px text line height and its
+ * Runs at a large base density (10) so the 48 dp button dominates Robolectric's fixed ~36 px text line height and its
  * position is predictable: it is the trailing child of the interval strip, inside the panel's 20 dp / 16 dp padding.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -47,7 +46,7 @@ class OverlayTouchTargetTest {
         activity.addContentView(host.root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         host.onAttached()
         shadowOf(android.os.Looper.getMainLooper()).idle()
-        val unbounded = View.MeasureSpec.makeMeasureSpec(5000, View.MeasureSpec.AT_MOST)
+        val unbounded = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)   // real 640 overlay-dp panel width
         host.root.measure(unbounded, unbounded)
         host.root.layout(0, 0, host.root.measuredWidth, host.root.measuredHeight)
         shadowOf(android.os.Looper.getMainLooper()).idle()
@@ -62,12 +61,12 @@ class OverlayTouchTargetTest {
         shadowOf(android.os.Looper.getMainLooper()).idle()
     }
 
-    private fun buttonCenterX(h: Harness) = h.host.root.measuredWidth - (20 + 16) * PX_PER_DP
-    private fun buttonCenterY() = (16 + 16) * PX_PER_DP
+    private fun buttonCenterX(h: Harness) = h.host.root.measuredWidth - (20 + 24) * PX_PER_DP
+    private fun buttonCenterY() = (16 + 24) * PX_PER_DP
 
     @Test
-    fun buttonSizeIs32Dp() {
-        assertEquals(32.dp, OpenAppButtonSize)
+    fun buttonSizeIs48OverlayDp() {
+        assertEquals(48.dp, OpenAppButtonSize)
     }
 
     @Test
@@ -78,17 +77,17 @@ class OverlayTouchTargetTest {
     }
 
     @Test
-    fun buttonHitAreaIsAtLeast32OverlayDpWide() {
+    fun buttonHitAreaIs48OverlayDp() {
         val h = harness()
-        val half = 16 * PX_PER_DP
+        val half = 24 * PX_PER_DP
         h.tap(buttonCenterX(h) - half + 2f, buttonCenterY())
         h.tap(buttonCenterX(h) + half - 2f, buttonCenterY())
         h.tap(buttonCenterX(h), buttonCenterY() + half - 2f)
-        assertEquals("taps just inside the 32 dp edge", 3, h.openApp)
+        assertEquals("taps just inside the 48 overlay-dp edge", 3, h.openApp)
     }
 
     @Test
-    fun tappingThePanelElsewhereDoesNothing() {
+    fun tappingThePanelBodyDoesNotOpenTheApp() {
         val h = harness()
         h.tap(h.host.root.measuredWidth / 2f, h.host.root.measuredHeight / 2f)
         h.tap(20f, h.host.root.measuredHeight - 20f)

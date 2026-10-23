@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -34,8 +35,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.pedalmate.workout.PowerZone
 
-/** Size of the round Open PedalMate button in overlay dp. */
-internal val OpenAppButtonSize = 32.dp
+/** Size of the round Open PedalMate button in overlay dp: ~32 device dp at OVERLAY_SCALE 0.58, as in the approved mockup. */
+internal val OpenAppButtonSize = 48.dp
 
 private val PanelBackground = Color(0xD1000000)
 private val IntervalYellow = ZoneColors.Paused
@@ -91,7 +92,7 @@ private fun OpenAppButton(onClick: () -> Unit) {
         Modifier.size(OpenAppButtonSize)
             .background(Color(0x33FFFFFF), CircleShape)
             .clip(CircleShape)
-            .clickable(onClickLabel = "Open PedalMate", onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "Open PedalMate" },
         contentAlignment = Alignment.Center,
     ) {

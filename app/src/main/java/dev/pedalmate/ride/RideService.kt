@@ -57,6 +57,7 @@ class RideService : Service() {
     private lateinit var overlay: OverlayController
     private lateinit var prefs: OverlayPrefs
     private lateinit var toast: IntervalToast
+    private val openAppAction: () -> Unit = ::openApp   // one stable reference, not rebuilt each recomposition
     private var overlayJob: Job? = null
     private val container get() = appContainer
     private var lastStartId = 0
@@ -117,7 +118,7 @@ class RideService : Service() {
             content = {
                 val model by remember { container.session.snapshot.map { OverlayUiModel.from(it) } }
                     .collectAsState(initial = OverlayUiModel.from(container.session.snapshot.value))
-                OverlayContent(model, onOpenApp = ::openApp)
+                OverlayContent(model, onOpenApp = openAppAction)
             },
             initial = saved.placement,
             onMoved = { p -> container.scope.launch { prefs.setPlacement(p) } },
@@ -138,7 +139,8 @@ class RideService : Service() {
 
     /**
      * Overlay button: bring the existing [SetupActivity] to the front. The one place to swap the mechanism if the
-     * bike OS blocks the background start ("Background activity launch blocked"): fire a PendingIntent.getActivity instead.
+     * bike OS blocks the background start: fire a PendingIntent.getActivity instead.
+     * A blocked start is silent (no exception, so the Log.w below never fires); look for "Background activity launch blocked" in logcat.
      */
     private fun openApp() {
         runCatching { startActivity(SetupActivity.bringToFrontIntent(this)) }
