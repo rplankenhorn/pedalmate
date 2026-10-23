@@ -18,6 +18,9 @@ class FakeScanner : BleScanner {
     var scanning = false; private set
     var lastTarget: ScanTarget? = null; private set
     var lastBalanced = false; private set
+    /** Stamps [startTimes]; tests that care point it at their FakeClock. */
+    var clock: () -> Long = { 0L }
+    val startTimes = mutableListOf<Long>()
     private var onFound: ((BleDevice) -> Unit)? = null
     private var onFailed: ((String) -> Unit)? = null
 
@@ -28,7 +31,7 @@ class FakeScanner : BleScanner {
         target: ScanTarget?,
         balanced: Boolean,
     ) {
-        startCount++
+        startCount++; startTimes += clock()
         lastTarget = target; lastBalanced = balanced
         val failure = failOnStart
         if (failure != null) { onScanFailed(failure); return }

@@ -17,8 +17,9 @@ import kotlinx.coroutines.flow.asStateFlow
  * goes through PAIR HR STRAP. The scan is restarted every [SCAN_REFRESH_MS]. A connect that times
  * out ([CONNECT_TIMEOUT_MS]) or fails early, a link that drops, and a link silent for [DEAD_MS] are
  * closed and the scan resumes after [POST_CLOSE_DELAY_MS] (lets the stack release the GATT).
- * Scan failures (permission, location off, Bluetooth off) back off 2 s..30 s so the scanner never
- * hits Android's 5-starts-per-30-s limit.
+ * Rescans are at least [MIN_SCAN_INTERVAL_MS] apart and scan failures (permission, location
+ * off, Bluetooth off) back off 2 s..30 s, which keeps the scanner under Android's 5-starts-per-30-s limit.
+ * (A resume after pairing scans at once; that user-driven burst can still hit the limit and self-heals via the backoff.)
  *
  * An iPhone relay that is backgrounded advertises neither 0x180D nor its name, so no Android scan
  * sees it; the continuous scan catches it within seconds of it coming to the foreground, and the
@@ -43,11 +44,11 @@ class HeartRateConnector(
 
     private var phase = Phase.STOPPED
     private var link: HeartRateLink? = null
-    private var attempt: SavedHrDevice? = null
     private var paused = false
     private var attemptStartedAt = 0L
     private var scanActive = false
     private var scanStartedAt = 0L
+    private var lastScanStartAt = Long.MIN_VALUE / 2
     private val found = ArrayList<BleDevice>()
     private var scanFailure: String? = null
     private var failures = 0
@@ -58,7 +59,7 @@ class HeartRateConnector(
 
     @Synchronized override fun start() {
         if (phase != Phase.STOPPED) return
-        failures = 0; everConnected = false; paused = false
+        failures = 0; everConnected = false
         publishLost()
         scheduler.start(TICK_MS) { onTick() }
         beginCycle(clock())
@@ -71,7 +72,7 @@ class HeartRateConnector(
         _bpm.value = null; _state.value = ConnectionState.Unavailable
     }
 
-    /** Pairing: remember [device] and connect to it now. */
+    /** Pairing: remember [device] and start scanning for it now (the scan connects on a match). */
     @Synchronized fun useDevice(device: BleDevice) {
         runCatching { store.save(SavedHrDevice(device.address, device.name)) }
             .onFailure { Log.w(TAG, "saving paired device failed", it) }
@@ -135,7 +136,7 @@ class HeartRateConnector(
 
     private fun startScan(target: SavedHrDevice, now: Long) {
         phase = Phase.SCANNING
-        found.clear(); scanFailure = null; scanStartedAt = now; scanActive = true
+        found.clear(); scanFailure = null; scanStartedAt = now; lastScanStartAt = now; scanActive = true
         try {
             scanner.startScan(
                 onDeviceFound = { d -> synchronized(this) { if (phase == Phase.SCANNING) found += d } },
@@ -148,10 +149,14 @@ class HeartRateConnector(
         }
     }
 
-    /** Closes the link and scans again after [POST_CLOSE_DELAY_MS]; not a failure, so no growing backoff. */
+    /**
+     * Closes the link and scans again after [POST_CLOSE_DELAY_MS], but never sooner than
+     * [MIN_SCAN_INTERVAL_MS] after the previous scan start, so a device that advertises yet whose
+     * link keeps dying before a first frame cannot exceed 4 scan starts per 30 s.
+     */
     private fun closeAndRescan(now: Long) {
         closeLink()
-        nextCycleAt = now + POST_CLOSE_DELAY_MS
+        nextCycleAt = maxOf(now + POST_CLOSE_DELAY_MS, lastScanStartAt + MIN_SCAN_INTERVAL_MS)
         phase = Phase.WAITING
     }
 
@@ -268,6 +273,8 @@ class HeartRateConnector(
         const val TICK_MS = 500L
         const val CONNECT_TIMEOUT_MS = 8_000L
         const val POST_CLOSE_DELAY_MS = 2_500L
+        /** Floor between scan starts: 5 starts in 30 s trips Android's SCAN_FAILED_SCANNING_TOO_FREQUENTLY. */
+        const val MIN_SCAN_INTERVAL_MS = 8_000L
         const val SCAN_REFRESH_MS = 300_000L
         const val STALE_MS = 5_000L
         /** Silence that tears the link down; the iPhone relay bursts, 60 s is the tunable if 45 s churns. */

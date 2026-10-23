@@ -1,7 +1,7 @@
 package dev.pedalmate.heartrate
 
 /**
- * Applies a rider's pairing choice. A real [HeartRateConnector] saves and reconnects immediately;
+ * Applies a rider's pairing choice. A real [HeartRateConnector] saves and starts scanning for it immediately;
  * any other source (the mock flavor) only needs the device saved.
  */
 class HrPairing(private val hr: ManagedHeartRateDataSource, private val store: SavedHrDeviceStore) {

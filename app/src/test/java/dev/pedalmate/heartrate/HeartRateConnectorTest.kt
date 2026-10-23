@@ -23,6 +23,7 @@ class HeartRateConnectorTest {
     private val saved = SavedHrDevice("A", "HR-1")
     private val store = MemStore(saved)
     private val hr = HeartRateConnector(scanner, factory, store, clock, scheduler)
+    init { scanner.clock = clock }
     private val state get() = hr.connectionState.value
     private val bpm get() = hr.bpm.value
     private fun tick(ms: Long) = harness.advanceBy(ms, stepMs = 500L)
@@ -140,8 +141,8 @@ class HeartRateConnectorTest {
     @Test fun `scan failures back off up to 30 s`() {
         scanner.failOnStart = "boom"
         hr.start(); tick(180_000)
-        // gaps of 2, 4, 8, 16, 30, 30 s (+ tick granularity): starts at 0, 2.5, 7, 15.5, 32, 62.5, 93, 123.5, 154.5
-        assertEquals(9, scanner.startCount)
+        // gaps of 2, 4, 8, 16, 30, 30 s plus tick granularity (failure is noticed on the next tick)
+        assertEquals(listOf(0L, 2_500L, 7_000L, 15_500L, 32_000L, 62_500L, 93_000L, 123_500L, 154_000L), scanner.startTimes)
     }
 
     @Test fun `Bluetooth off starts no scan until it is back`() {
@@ -154,6 +155,7 @@ class HeartRateConnectorTest {
 
     @Test fun `a link drop closes it and scans again after 2_5 s`() {
         val l = connectToA()
+        tick(10_000); l.frame(72); tick(500)
         l.drop(); tick(500)
         assertEquals(ConnectionState.Disconnected, state)
         assertNull(bpm)
@@ -230,7 +232,7 @@ class HeartRateConnectorTest {
         assertEquals(1, factory.created.size)
     }
 
-    @Test fun `a scan-selected link that fails early rescans after 2_5 s`() {
+    @Test fun `a scan-selected link that fails early rescans once the 8 s scan spacing has passed`() {
         hr.start()
         scanner.emit(BleDevice("C", "HR-1")); tick(500)
         val l = factory.created.last()
@@ -238,11 +240,39 @@ class HeartRateConnectorTest {
         l.failNow(); tick(500)
         assertTrue(l.stopped)
         assertEquals(ConnectionState.Unavailable, state)
-        assertEquals(1, scanner.startCount)
-        tick(2_000)
+        tick(4_500)
         assertEquals(1, scanner.startCount)
         tick(500)
         assertEquals(2, scanner.startCount)
+    }
+
+    @Test fun `a link that keeps failing early never causes 5 scan starts in 30 s`() {
+        hr.start()
+        repeat(120) {
+            tick(500)
+            if (scanner.scanning) scanner.emit(BleDevice("A", "HR-1"))
+            tick(500)
+            factory.created.lastOrNull()?.takeIf { !it.stopped }?.failNow()
+        }
+        assertTrue(factory.created.size >= 5)
+        val t = scanner.startTimes
+        for (i in 0..t.size - 5) assertTrue("starts ${t.subList(i, i + 5)}", t[i + 4] - t[i] > 30_000L)
+    }
+
+    @Test fun `a later scan failure backs off from 2 s after a successful connection`() {
+        scanner.failOnStart = "boom"
+        hr.start(); tick(40_000)
+        scanner.failOnStart = null; tick(35_000)
+        scanner.emit(BleDevice("A", "HR-1")); tick(500)
+        factory.created.last().frame(70); tick(500)
+        tick(10_000)
+        factory.created.last().frame(70); tick(500)
+        scanner.failOnStart = "boom"
+        factory.created.last().drop(); tick(3_000)
+        // the rescan after the drop fails at once; with failures reset the retry comes 2 s (+500 ms detection) later
+        tick(3_000)
+        val t = scanner.startTimes
+        assertEquals(2_500L, t[t.size - 1] - t[t.size - 2])
     }
 
     @Test fun `frames win over failed on the same tick`() {

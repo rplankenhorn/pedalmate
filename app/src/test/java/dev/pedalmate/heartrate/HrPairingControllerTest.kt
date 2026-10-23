@@ -1,7 +1,10 @@
 package dev.pedalmate.heartrate
 
+import dev.pedalmate.testutil.FakeClock
 import dev.pedalmate.testutil.FakeHr
+import dev.pedalmate.testutil.FakeLinkFactory
 import dev.pedalmate.testutil.FakeScanner
+import dev.pedalmate.testutil.FakeTickScheduler
 import dev.pedalmate.testutil.MemStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -20,6 +23,13 @@ class HrPairingControllerTest {
     private val alpha = BleDevice("A", "alpha")
     private val zeta = BleDevice("B", "Zeta")
 
+    private val connScanner = FakeScanner()
+    private val connStore = MemStore(SavedHrDevice("A", "alpha"))
+    private val connClock = FakeClock()
+    private val connScheduler = FakeTickScheduler()
+    private val connector = HeartRateConnector(
+        connScanner, FakeLinkFactory(connClock), connStore, connClock, connScheduler,
+    )
     private fun TestScope.controller() = HrPairingController(scanner, HrPairing(FakeHr(), store), backgroundScope)
 
     @Test
@@ -30,13 +40,6 @@ class HrPairingControllerTest {
         assertEquals(1, scanner.startCount)
     }
 
-    private val connScanner = FakeScanner()
-    private val connStore = MemStore(SavedHrDevice("A", "alpha"))
-    private val connClock = dev.pedalmate.testutil.FakeClock()
-    private val connScheduler = dev.pedalmate.testutil.FakeTickScheduler()
-    private val connector = HeartRateConnector(
-        connScanner, dev.pedalmate.testutil.FakeLinkFactory(connClock), connStore, connClock, connScheduler,
-    )
     private fun TestScope.pairingController() =
         HrPairingController(scanner, HrPairing(connector, connStore), backgroundScope)
 
