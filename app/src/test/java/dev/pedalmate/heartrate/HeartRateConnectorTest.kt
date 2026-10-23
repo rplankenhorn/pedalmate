@@ -26,7 +26,12 @@ class HeartRateConnectorTest {
     private val state get() = hr.connectionState.value
     private val bpm get() = hr.bpm.value
     private fun tick(ms: Long) = harness.advanceBy(ms, stepMs = 500L)
-    private fun connectToA(): FakeLink { hr.start(); val l = factory.created.last(); l.frame(72); tick(500); return l }
+    private val target = ScanTarget("A", "HR-1")
+    /** Scans, finds the saved strap, and delivers a first frame. */
+    private fun connectToA(): FakeLink {
+        hr.start(); scanner.emit(BleDevice("A", "HR-1")); tick(500)
+        val l = factory.created.last(); l.frame(72); tick(500); return l
+    }
 
     @Test fun `no saved device stays Unavailable and never scans`() {
         store.device = null
@@ -36,70 +41,87 @@ class HeartRateConnectorTest {
         assertEquals(ConnectionState.Unavailable, state)
         assertNull(bpm)
         store.device = saved; tick(500)
-        assertEquals(1, factory.created.size)
+        assertEquals(1, scanner.startCount)
     }
 
-    @Test fun `saved address hit connects without scanning`() {
+    @Test fun `start scans at once with the saved target and creates no link`() {
+        hr.start()
+        assertEquals(1, scanner.startCount)
+        assertTrue(scanner.scanning)
+        assertEquals(target, scanner.lastTarget)
+        assertTrue(scanner.lastBalanced)
+        assertTrue(factory.created.isEmpty())
+        assertEquals(ConnectionState.Unavailable, state)
+    }
+
+    @Test fun `the first match on the saved address connects and stops the scan`() {
         connectToA()
         assertEquals(ConnectionState.Connected, state)
         assertEquals(72, bpm)
-        assertEquals(0, scanner.startCount)
         assertEquals(listOf("A"), factory.created.map { it.address })
+        assertFalse(scanner.scanning)
         assertEquals(0, store.saves)
     }
 
-    @Test fun `address miss falls back to a name match and saves the new address`() {
-        hr.start(); tick(8_000)
-        assertTrue(factory.created[0].stopped)
-        assertEquals(1, scanner.startCount)
+    @Test fun `a name match on a rotated address connects and saves the address at match time`() {
+        hr.start()
         scanner.emit(BleDevice("B", "Other")); tick(500)
-        assertEquals(1, factory.created.size)
+        assertTrue(factory.created.isEmpty())
         scanner.emit(BleDevice("C", "HR-1")); tick(500)
         assertEquals("C", factory.created.last().address)
         assertFalse(scanner.scanning)
+        // saved before any frame arrives
+        assertEquals(SavedHrDevice("C", "HR-1"), store.device)
         factory.created.last().frame(70); tick(500)
         assertEquals(ConnectionState.Connected, state)
         assertEquals(70, bpm)
-        assertEquals(SavedHrDevice("C", "HR-1"), store.device)
         assertEquals(1, store.saves)
     }
 
-    @Test fun `first device is the fallback and does not overwrite the saved identity`() {
-        hr.start(); tick(8_000)
+    @Test fun `an unrelated device is never connected to`() {
+        hr.start()
         scanner.emit(BleDevice("B", null)); scanner.emit(BleDevice("D", "Another"))
-        tick(6_000)
-        assertEquals("B", factory.created.last().address)
-        factory.created.last().frame(66); tick(500)
-        assertEquals(ConnectionState.Connected, state)
+        tick(60_000)
+        assertTrue(factory.created.isEmpty())
         assertEquals(saved, store.device)
-        assertEquals(0, store.saves)
     }
 
-    @Test fun `a scan hit on the saved address connects at once`() {
-        hr.start(); tick(8_000)
-        scanner.emit(BleDevice("A", null)); tick(500)
-        assertEquals(2, factory.created.size)
-        assertEquals("A", factory.created[1].address)
+    @Test fun `no match keeps one scan for 2 minutes and refreshes it at 5 minutes`() {
+        hr.start(); tick(120_000)
+        assertEquals(1, scanner.startCount)
+        assertEquals(0, scanner.stopCount)
+        assertTrue(scanner.scanning)
+        tick(180_000)
+        assertEquals(2, scanner.startCount)
+        assertEquals(1, scanner.stopCount)
+        assertTrue(scanner.scanning)
+        assertEquals(target, scanner.lastTarget)
+        assertTrue(factory.created.isEmpty())
     }
 
-    @Test fun `empty scans back off 2 4 8 16 30 30 seconds and retry the saved address first`() {
-        hr.start(); tick(180_000)
-        assertEquals(
-            listOf(0L, 16_000L, 34_000L, 56_000L, 86_000L, 130_000L, 174_000L),
-            factory.created.map { it.createdAtMs },
-        )
-        assertTrue(factory.created.all { it.address == "A" })
-    }
-
-    @Test fun `scan failure such as location off backs off and retries without throwing`() {
-        scanner.failOnStart = "Missing Bluetooth permission"
-        hr.start(); tick(8_500)
-        assertEquals(1, factory.created.size)
-        tick(1_500)
-        assertEquals(1, factory.created.size)
+    @Test fun `a device appearing at 60 s connects on the next tick`() {
+        hr.start(); tick(60_000)
+        scanner.emit(BleDevice("A", "HR-1"))
+        assertTrue(factory.created.isEmpty())
         tick(500)
-        assertEquals(2, factory.created.size)
+        assertEquals(1, factory.created.size)
+        assertEquals(60_500L, factory.created[0].createdAtMs)
+    }
+
+    @Test fun `scan failure such as location off backs off 2 4 8 seconds and retries without throwing`() {
+        scanner.failOnStart = "Missing Bluetooth permission"
+        hr.start(); tick(500)
+        assertEquals(1, scanner.startCount)
+        tick(1_500)
+        assertEquals(1, scanner.startCount)
+        tick(500)
+        assertEquals(2, scanner.startCount)
+        tick(4_000)
+        assertEquals(2, scanner.startCount)
+        tick(500)
+        assertEquals(3, scanner.startCount)
         assertEquals(ConnectionState.Unavailable, state)
+        assertTrue(factory.created.isEmpty())
     }
 
     @Test fun `scan failure while scanning gives the same backoff`() {
@@ -107,35 +129,46 @@ class HeartRateConnectorTest {
         assertTrue(scanner.scanning)
         scanner.fail("Scan failed (error code 2)")
         tick(500)
-        assertEquals(1, factory.created.size)
+        assertEquals(1, scanner.startCount)
         tick(1_500)
-        assertEquals(1, factory.created.size)
+        assertEquals(1, scanner.startCount)
         tick(500)
-        assertEquals(2, factory.created.size)
+        assertEquals(2, scanner.startCount)
         assertEquals(ConnectionState.Unavailable, state)
     }
 
-    @Test fun `Bluetooth off creates no links until it is back`() {
-        scanner.available = false
-        hr.start(); tick(5_000)
-        assertTrue(factory.created.isEmpty())
-        scanner.available = true; tick(1_000)
-        assertEquals(1, factory.created.size)
+    @Test fun `scan failures back off up to 30 s`() {
+        scanner.failOnStart = "boom"
+        hr.start(); tick(180_000)
+        // gaps of 2, 4, 8, 16, 30, 30 s (+ tick granularity): starts at 0, 2.5, 7, 15.5, 32, 62.5, 93, 123.5, 154.5
+        assertEquals(9, scanner.startCount)
     }
 
-    @Test fun `disconnect retries the saved address immediately`() {
+    @Test fun `Bluetooth off starts no scan until it is back`() {
+        scanner.available = false
+        hr.start(); tick(5_000)
+        assertEquals(0, scanner.startCount)
+        scanner.available = true; tick(1_000)
+        assertEquals(1, scanner.startCount)
+    }
+
+    @Test fun `a link drop closes it and scans again after 2_5 s`() {
         val l = connectToA()
         l.drop(); tick(500)
         assertEquals(ConnectionState.Disconnected, state)
         assertNull(bpm)
         assertTrue(l.stopped)
-        assertEquals(2, factory.created.size)
-        assertEquals("A", factory.created[1].address)
+        assertEquals(1, scanner.startCount)
+        tick(2_000)
+        assertEquals(1, scanner.startCount)
+        tick(500)
+        assertEquals(2, scanner.startCount)
+        assertTrue(scanner.scanning)
+        assertEquals(1, factory.created.size)
     }
 
     @Test fun `identical frames keep it live and a silent strap goes stale after 5 s`() {
-        hr.start()
-        val l = factory.created.last()
+        val l = connectToA()
         repeat(40) { l.frame(72); tick(500) }
         assertEquals(ConnectionState.Connected, state)
         assertEquals(72, bpm)
@@ -151,88 +184,121 @@ class HeartRateConnectorTest {
         assertEquals(70, bpm)
     }
 
-    @Test fun `a link silent for 15 s is torn down and reconnected`() {
-        hr.start()
-        val l = factory.created.last()
-        repeat(40) { l.frame(72); tick(500) }
-        tick(5_000)
-        tick(9_500)
-        assertEquals(1, factory.created.size)
+    @Test fun `45 s of silence tears the link down and rescans after 2_5 s`() {
+        val l = connectToA()
+        tick(44_500)
+        assertFalse(l.stopped)
+        assertEquals(1, scanner.startCount)
         tick(500)
         assertTrue(l.stopped)
-        assertEquals(2, factory.created.size)
-    }
-
-    @Test fun `a received frame resets the backoff`() {
-        hr.start(); tick(16_000)
-        factory.created.last().frame(70); tick(500)
-        factory.created.last().drop(); tick(500)
-        tick(16_000)
-        assertEquals(listOf(0L, 16_000L, 17_000L, 33_000L), factory.created.map { it.createdAtMs })
-    }
-
-    @Test fun `a scan-selected link that never delivers a frame times out and backs off`() {
-        hr.start(); tick(8_000)
-        scanner.emit(BleDevice("C", "HR-1")); tick(500)
-        tick(8_000)
-        tick(2_000)
-        assertEquals(listOf(0L, 8_500L, 18_500L), factory.created.map { it.createdAtMs })
-        assertEquals("A", factory.created.last().address)
-    }
-
-    @Test fun `a direct attempt whose link fails early falls through to the scan before the timeout`() {
-        hr.start(); tick(2_000)
-        assertEquals(0, scanner.startCount)
-        factory.created.last().failNow(); tick(500)
         assertEquals(1, scanner.startCount)
-        assertTrue(factory.created.last().stopped)
-    }
-
-    @Test fun `a scan-selected link that fails early takes the fail path and backs off`() {
-        hr.start(); tick(8_000)
-        scanner.emit(BleDevice("C", "HR-1")); tick(500)
-        val viaScan = factory.created.last()
         tick(2_000)
-        val scansBefore = scanner.startCount
-        viaScan.failNow(); tick(500)
-        assertTrue(viaScan.stopped)
-        assertEquals(ConnectionState.Unavailable, state)
-        // fail path, not the scan fall-through: no new scan was started by the failing tick
-        assertEquals(scansBefore, scanner.startCount)
-        // backoff, not an immediate retry: no new link until the backoff elapses
-        val n = factory.created.size
-        tick(1_000)
-        assertEquals(n, factory.created.size)
-        tick(HeartRateConnector.BACKOFF_BASE_MS)
-        assertEquals(n + 1, factory.created.size)
-        assertTrue(factory.created.last() !== viaScan)
+        assertEquals(1, scanner.startCount)
+        tick(500)
+        assertEquals(2, scanner.startCount)
+        assertEquals(1, factory.created.size)
     }
 
-    @Test fun `a link that has not failed is still connecting at 7 s`() {
-        hr.start(); tick(7_000)
-        assertEquals(0, scanner.startCount)
+    @Test fun `40 s bursty silences never reconnect over 10 minutes`() {
+        val l = connectToA()
+        var sawNullBetweenBursts = false
+        repeat(15) {
+            l.frame(70); l.frame(71); tick(500)
+            tick(39_500)
+            if (bpm == null) sawNullBetweenBursts = true
+        }
+        assertTrue(sawNullBetweenBursts)
+        assertFalse(l.stopped)
         assertEquals(1, factory.created.size)
-        assertTrue(!factory.created.last().stopped)
+        assertEquals(1, scanner.startCount)
+    }
+
+    @Test fun `a scan-selected link that never delivers a frame times out and rescans after 2_5 s`() {
+        hr.start()
+        scanner.emit(BleDevice("C", "HR-1")); tick(500)
+        val l = factory.created.last()
+        tick(7_500)
+        assertFalse(l.stopped)
+        tick(500)
+        assertTrue(l.stopped)
+        assertEquals(1, scanner.startCount)
+        tick(2_000)
+        assertEquals(1, scanner.startCount)
+        tick(500)
+        assertEquals(2, scanner.startCount)
+        assertTrue(scanner.scanning)
+        assertEquals(1, factory.created.size)
+    }
+
+    @Test fun `a scan-selected link that fails early rescans after 2_5 s`() {
+        hr.start()
+        scanner.emit(BleDevice("C", "HR-1")); tick(500)
+        val l = factory.created.last()
+        tick(2_000)
+        l.failNow(); tick(500)
+        assertTrue(l.stopped)
+        assertEquals(ConnectionState.Unavailable, state)
+        assertEquals(1, scanner.startCount)
+        tick(2_000)
+        assertEquals(1, scanner.startCount)
+        tick(500)
+        assertEquals(2, scanner.startCount)
     }
 
     @Test fun `frames win over failed on the same tick`() {
-        hr.start()
+        hr.start(); scanner.emit(BleDevice("A", "HR-1")); tick(500)
         val l = factory.created.last()
         l.failNow(); l.frame(80); tick(500)
         assertEquals(ConnectionState.Connected, state)
-        assertEquals(0, scanner.startCount)
+        assertEquals(1, scanner.startCount)
     }
 
-    @Test fun `useDevice saves and reconnects immediately`() {
+    @Test fun `pause stops the scan and resume scans again`() {
+        hr.start(); tick(1_000)
+        hr.pauseScanning()
+        assertFalse(scanner.scanning)
+        tick(30_000)
+        assertEquals(1, scanner.startCount)
+        hr.resumeScanning()
+        assertEquals(2, scanner.startCount)
+        assertTrue(scanner.scanning)
+        assertEquals(target, scanner.lastTarget)
+    }
+
+    @Test fun `pause does not close a connected link and resume starts no scan`() {
+        val l = connectToA()
+        hr.pauseScanning()
+        assertFalse(l.stopped)
+        assertEquals(ConnectionState.Connected, state)
+        l.frame(75); tick(500)
+        assertEquals(75, bpm)
+        hr.resumeScanning()
+        assertFalse(l.stopped)
+        assertEquals(1, scanner.startCount)
+        assertEquals(ConnectionState.Connected, state)
+    }
+
+    @Test fun `a drop while paused does not scan until resumed`() {
+        val l = connectToA()
+        hr.pauseScanning()
+        l.drop(); tick(10_000)
+        assertEquals(1, scanner.startCount)
+        hr.resumeScanning()
+        assertEquals(2, scanner.startCount)
+    }
+
+    @Test fun `useDevice saves and scans for the new target`() {
         store.device = null
         hr.start(); tick(2_000)
+        assertEquals(0, scanner.startCount)
         hr.useDevice(BleDevice("A", "HR-1"))
         assertEquals(SavedHrDevice("A", "HR-1"), store.device)
-        assertEquals(1, factory.created.size)
+        assertEquals(1, scanner.startCount)
+        scanner.emit(BleDevice("A", "HR-1")); tick(500)
         factory.created[0].frame(70); tick(500)
         hr.useDevice(BleDevice("B", "X"))
         assertTrue(factory.created[0].stopped)
-        assertEquals("B", factory.created.last().address)
+        assertEquals(ScanTarget("B", "X"), scanner.lastTarget)
         assertEquals(ConnectionState.Disconnected, state)
         assertNull(bpm)
     }
@@ -244,6 +310,7 @@ class HeartRateConnectorTest {
         assertTrue(l.stopped)
         assertNull(bpm)
         tick(5_000)
+        assertEquals(1, scanner.startCount)
         assertEquals(1, factory.created.size)
     }
 
@@ -256,11 +323,16 @@ class HeartRateConnectorTest {
         assertFalse(scheduler.running)
         hr.stop()
         hr.start()
-        assertEquals(2, factory.created.size)
+        assertEquals(2, scanner.startCount)
+    }
+
+    @Test fun `stop ends a running scan`() {
+        hr.start(); hr.stop()
+        assertFalse(scanner.scanning)
     }
 
     @Test fun `start is idempotent`() {
         hr.start(); hr.start()
-        assertEquals(1, factory.created.size)
+        assertEquals(1, scanner.startCount)
     }
 }

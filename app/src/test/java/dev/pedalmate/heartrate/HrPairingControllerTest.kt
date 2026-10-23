@@ -30,6 +30,41 @@ class HrPairingControllerTest {
         assertEquals(1, scanner.startCount)
     }
 
+    private val connScanner = FakeScanner()
+    private val connStore = MemStore(SavedHrDevice("A", "alpha"))
+    private val connClock = dev.pedalmate.testutil.FakeClock()
+    private val connScheduler = dev.pedalmate.testutil.FakeTickScheduler()
+    private val connector = HeartRateConnector(
+        connScanner, dev.pedalmate.testutil.FakeLinkFactory(connClock), connStore, connClock, connScheduler,
+    )
+    private fun TestScope.pairingController() =
+        HrPairingController(scanner, HrPairing(connector, connStore), backgroundScope)
+
+    @Test
+    fun `pairing scan pauses the connector scan and the window end resumes it`() = runTest {
+        connector.start()
+        assertTrue(connScanner.scanning)
+        val c = pairingController()
+        c.startScan()
+        assertTrue(!connScanner.scanning)
+        advanceTimeBy(10_000); runCurrent()
+        assertEquals(2, connScanner.startCount)
+        assertTrue(connScanner.scanning)
+    }
+
+    @Test
+    fun `stop, failure and select all resume the connector scan`() = runTest {
+        connector.start()
+        val c = pairingController()
+        c.startScan(); c.stopScan()
+        assertEquals(2, connScanner.startCount)
+        c.startScan(); scanner.fail("x")
+        assertEquals(3, connScanner.startCount)
+        c.startScan(); c.select(alpha)
+        assertEquals(4, connScanner.startCount)
+        assertTrue(connScanner.scanning)
+    }
+
     @Test
     fun `results are deduplicated and sorted`() = runTest {
         val c = controller()

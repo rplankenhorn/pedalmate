@@ -74,6 +74,12 @@ class HeartRateConnector(
         phase = Phase.NO_DEVICE
     }
 
+    /** Pairing scan is running: stop the connector's own scan (a CONNECTED link is left alone). */
+    @Synchronized fun pauseScanning() {}
+
+    /** Pairing scan is over: scan again if the connector was not connected. */
+    @Synchronized fun resumeScanning() {}
+
     // ---- state machine (all private functions run under the instance lock) ----
 
     private fun loadSaved(): SavedHrDevice? =
@@ -234,6 +240,8 @@ class HeartRateConnector(
         const val TICK_MS = 500L
         const val CONNECT_TIMEOUT_MS = 8_000L
         const val SCAN_WINDOW_MS = 6_000L
+        const val POST_CLOSE_DELAY_MS = 2_500L
+        const val SCAN_REFRESH_MS = 300_000L
         const val STALE_MS = 5_000L
         const val DEAD_MS = 15_000L
         const val BACKOFF_BASE_MS = 2_000L
