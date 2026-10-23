@@ -1,6 +1,9 @@
 // Derived from OpenRide (Apache-2.0), app/src/main/java/dev/digitalducktape/openride/core/heartrate/BleScanner.kt. Modified by PedalMate.
 package dev.pedalmate.heartrate
 
+/** A known strap to find again: a scan with a target also reports devices matching [address] or [name]. */
+data class ScanTarget(val address: String, val name: String?)
+
 /**
  * Abstraction over BLE scanning for nearby heart-rate straps (PRD P1-4, T17). A narrow
  * interface — same reasoning as [HeartRateDataSource] and
@@ -17,8 +20,17 @@ interface BleScanner {
      * Starts scanning for devices advertising the Heart Rate Service (`0x180D`). [onDeviceFound]
      * fires once per newly-seen device (by address); [onScanFailed] fires at most once, with a
      * human-readable reason, if the scan can't start or is stopped by the system.
+     *
+     * With a [target], devices matching its address or name are reported as well (the filters are
+     * ORed, so a strap that does not advertise 0x180D is still found). [balanced] asks for a
+     * lower-power scan mode, for scans that run for minutes rather than seconds.
      */
-    fun startScan(onDeviceFound: (BleDevice) -> Unit, onScanFailed: (String) -> Unit)
+    fun startScan(
+        onDeviceFound: (BleDevice) -> Unit,
+        onScanFailed: (String) -> Unit,
+        target: ScanTarget? = null,
+        balanced: Boolean = false,
+    )
 
     /** Stops a scan started by [startScan]. Safe to call even if no scan is running. */
     fun stopScan()

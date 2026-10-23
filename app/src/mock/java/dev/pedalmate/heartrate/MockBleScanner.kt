@@ -9,7 +9,12 @@ class MockBleScanner : BleScanner {
 
     override fun isBluetoothAvailable(): Boolean = true
 
-    override fun startScan(onDeviceFound: (BleDevice) -> Unit, onScanFailed: (String) -> Unit) {
+    override fun startScan(
+        onDeviceFound: (BleDevice) -> Unit,
+        onScanFailed: (String) -> Unit,
+        target: ScanTarget?,
+        balanced: Boolean,
+    ) {
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed({ onDeviceFound(BleDevice("00:11:22:33:44:01", "Mock HR 1")) }, 800L)
         handler.postDelayed({ onDeviceFound(BleDevice("00:11:22:33:44:02", "Mock HR 2")) }, 1_600L)

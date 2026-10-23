@@ -3,6 +3,7 @@ package dev.pedalmate.testutil
 import dev.pedalmate.heartrate.BleDevice
 import dev.pedalmate.heartrate.BleScanner
 import dev.pedalmate.heartrate.HeartRateLink
+import dev.pedalmate.heartrate.ScanTarget
 import dev.pedalmate.heartrate.SavedHrDevice
 import dev.pedalmate.heartrate.SavedHrDeviceStore
 import dev.pedalmate.sensor.ConnectionState
@@ -15,12 +16,20 @@ class FakeScanner : BleScanner {
     var startCount = 0; private set
     var stopCount = 0; private set
     var scanning = false; private set
+    var lastTarget: ScanTarget? = null; private set
+    var lastBalanced = false; private set
     private var onFound: ((BleDevice) -> Unit)? = null
     private var onFailed: ((String) -> Unit)? = null
 
     override fun isBluetoothAvailable() = available
-    override fun startScan(onDeviceFound: (BleDevice) -> Unit, onScanFailed: (String) -> Unit) {
+    override fun startScan(
+        onDeviceFound: (BleDevice) -> Unit,
+        onScanFailed: (String) -> Unit,
+        target: ScanTarget?,
+        balanced: Boolean,
+    ) {
         startCount++
+        lastTarget = target; lastBalanced = balanced
         val failure = failOnStart
         if (failure != null) { onScanFailed(failure); return }
         scanning = true; onFound = onDeviceFound; onFailed = onScanFailed

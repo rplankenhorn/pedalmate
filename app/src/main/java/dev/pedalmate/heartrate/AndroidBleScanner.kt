@@ -15,7 +15,12 @@ import java.util.UUID
 /**
  * Real [BleScanner] over `android.bluetooth`'s BLE scanning APIs, filtered to the standard
  * Heart Rate Service UUID (`0x180D`) so the pairing screen only lists relevant straps rather
- * than every BLE device in range (PRD P1-4, T17).
+ * than every BLE device in range (PRD P1-4, T17). When a [ScanTarget] is given (the connector
+ * hunting for its saved strap) the filter list also holds that device's address and name; Android
+ * ORs filters, so an iPhone relay whose rotated address or advertised name matches is found even
+ * when its advertisement lacks the service UUID. Results are `CALLBACK_TYPE_ALL_MATCHES`, and
+ * `balanced` selects `SCAN_MODE_BALANCED` for the connector's long-running scan (pairing keeps
+ * `LOW_LATENCY`). An unfiltered scan is deliberately not offered.
  *
  * **Hardware caveat (T17/#17)**: this project has no physical BLE heart-rate strap to test
  * against, so this class is built correctly *per the public Android BLE APIs and Bluetooth SIG
@@ -37,7 +42,12 @@ class AndroidBleScanner(private val context: Context) : BleScanner {
     override fun isBluetoothAvailable(): Boolean =
         bluetoothAdapter?.isEnabled == true
 
-    override fun startScan(onDeviceFound: (BleDevice) -> Unit, onScanFailed: (String) -> Unit) {
+    override fun startScan(
+        onDeviceFound: (BleDevice) -> Unit,
+        onScanFailed: (String) -> Unit,
+        target: ScanTarget?,
+        balanced: Boolean,
+    ) {
         val adapter = bluetoothAdapter
         if (adapter == null) {
             onScanFailed("This device has no Bluetooth adapter")
@@ -74,15 +84,23 @@ class AndroidBleScanner(private val context: Context) : BleScanner {
         }
         scanCallback = callback
 
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(HEART_RATE_SERVICE_UUID))
-            .build()
+        // Android ORs the filters: a result matching any one is delivered.
+        val filters = mutableListOf(
+            ScanFilter.Builder().setServiceUuid(ParcelUuid(HEART_RATE_SERVICE_UUID)).build(),
+        )
+        if (target != null) {
+            runCatching { ScanFilter.Builder().setDeviceAddress(target.address).build() }
+                .onSuccess { filters += it }
+                .onFailure { Log.w(TAG, "ignoring invalid saved address ${target.address}", it) }
+            target.name?.let { filters += ScanFilter.Builder().setDeviceName(it).build() }
+        }
         val settings = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setScanMode(if (balanced) ScanSettings.SCAN_MODE_BALANCED else ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .build()
 
         try {
-            scanner.startScan(listOf(filter), settings, callback)
+            scanner.startScan(filters, settings, callback)
         } catch (e: SecurityException) {
             // Missing BLUETOOTH_SCAN (API 31+) or ACCESS_FINE_LOCATION (API <=30) at runtime —
             // the pairing screen is expected to request permissions before calling startScan,
