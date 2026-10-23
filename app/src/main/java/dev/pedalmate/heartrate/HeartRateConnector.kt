@@ -7,7 +7,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Keeps a heart-rate strap (or iPhone relay) connected: saved address, then name rescan, then first device. */
+/**
+ * Keeps the saved heart-rate strap (or iPhone relay) connected, scan-first.
+ *
+ * With a saved device the connector runs ONE continuous filtered scan (0x180D service OR the saved
+ * address OR the saved name, see [AndroidBleScanner]) and connects the moment a result matches the
+ * saved address or name; the matched (possibly rotated) address is saved at match time. There is
+ * no direct-connect first try, no first-device fallback and no unfiltered scan: replacing a strap
+ * goes through PAIR HR STRAP. The scan is restarted every [SCAN_REFRESH_MS]. A connect that times
+ * out ([CONNECT_TIMEOUT_MS]) or fails early, a link that drops, and a link silent for [DEAD_MS] are
+ * closed and the scan resumes after [POST_CLOSE_DELAY_MS] (lets the stack release the GATT).
+ * Scan failures (permission, location off, Bluetooth off) back off 2 s..30 s so the scanner never
+ * hits Android's 5-starts-per-30-s limit.
+ *
+ * An iPhone relay that is backgrounded advertises neither 0x180D nor its name, so no Android scan
+ * sees it; the continuous scan catches it within seconds of it coming to the foreground, and the
+ * long [DEAD_MS] keeps the link once made across the relay's bursty frames.
+ *
+ * [pauseScanning]/[resumeScanning] let the pairing scan run alone; pausing never closes a CONNECTED link.
+ */
 class HeartRateConnector(
     private val scanner: BleScanner,
     private val linkFactory: (address: String) -> HeartRateLink,
@@ -16,7 +34,7 @@ class HeartRateConnector(
     private val scheduler: TickScheduler,
 ) : ManagedHeartRateDataSource {
 
-    private enum class Phase { STOPPED, NO_DEVICE, CONNECTING, SCANNING, CONNECTED, WAITING }
+    private enum class Phase { STOPPED, NO_DEVICE, CONNECTING, SCANNING, CONNECTED, WAITING, PAUSED }
 
     private val _bpm = MutableStateFlow<Int?>(null)
     override val bpm: StateFlow<Int?> = _bpm.asStateFlow()
@@ -26,8 +44,7 @@ class HeartRateConnector(
     private var phase = Phase.STOPPED
     private var link: HeartRateLink? = null
     private var attempt: SavedHrDevice? = null
-    private var attemptViaScan = false
-    private var attemptIsFallback = false
+    private var paused = false
     private var attemptStartedAt = 0L
     private var scanActive = false
     private var scanStartedAt = 0L
@@ -41,7 +58,7 @@ class HeartRateConnector(
 
     @Synchronized override fun start() {
         if (phase != Phase.STOPPED) return
-        failures = 0; everConnected = false
+        failures = 0; everConnected = false; paused = false
         publishLost()
         scheduler.start(TICK_MS) { onTick() }
         beginCycle(clock())
@@ -75,10 +92,16 @@ class HeartRateConnector(
     }
 
     /** Pairing scan is running: stop the connector's own scan (a CONNECTED link is left alone). */
-    @Synchronized fun pauseScanning() {}
+    @Synchronized fun pauseScanning() {
+        paused = true
+        if (phase == Phase.SCANNING) { abortScan(); phase = Phase.PAUSED }
+    }
 
     /** Pairing scan is over: scan again if the connector was not connected. */
-    @Synchronized fun resumeScanning() {}
+    @Synchronized fun resumeScanning() {
+        paused = false
+        if (phase == Phase.PAUSED) beginCycle(clock())
+    }
 
     // ---- state machine (all private functions run under the instance lock) ----
 
@@ -88,12 +111,13 @@ class HeartRateConnector(
     private fun beginCycle(now: Long) {
         val savedDevice = loadSaved()
         if (savedDevice == null) { phase = Phase.NO_DEVICE; return }
+        if (paused) { phase = Phase.PAUSED; return }
         val available = runCatching { scanner.isBluetoothAvailable() }.getOrDefault(false)
         if (!available) { Log.w(TAG, "Bluetooth is off"); fail(now); return }
-        connectTo(savedDevice, now, viaScan = false, fallback = false)
+        startScan(savedDevice, now)
     }
 
-    private fun connectTo(device: SavedHrDevice, now: Long, viaScan: Boolean, fallback: Boolean) {
+    private fun connectTo(device: SavedHrDevice, now: Long) {
         closeLink()
         try {
             val l = linkFactory(device.address)
@@ -104,23 +128,31 @@ class HeartRateConnector(
             Log.w(TAG, "connect to ${device.address} failed", e)
             fail(now); return
         }
-        attempt = device; attemptViaScan = viaScan; attemptIsFallback = fallback
         attemptStartedAt = now
         phase = Phase.CONNECTING
-        Log.i(TAG, "connecting to ${device.address} (${device.name}) viaScan=$viaScan fallback=$fallback")
+        Log.i(TAG, "connecting to ${device.address} (${device.name})")
     }
 
-    private fun startScan(now: Long) {
+    private fun startScan(target: SavedHrDevice, now: Long) {
         phase = Phase.SCANNING
         found.clear(); scanFailure = null; scanStartedAt = now; scanActive = true
         try {
             scanner.startScan(
                 onDeviceFound = { d -> synchronized(this) { if (phase == Phase.SCANNING) found += d } },
                 onScanFailed = { r -> synchronized(this) { if (phase == Phase.SCANNING) scanFailure = r } },
+                target = ScanTarget(target.address, target.name),
+                balanced = true,
             )
         } catch (e: RuntimeException) {
             scanFailure = e.message ?: "scan error"
         }
+    }
+
+    /** Closes the link and scans again after [POST_CLOSE_DELAY_MS]; not a failure, so no growing backoff. */
+    private fun closeAndRescan(now: Long) {
+        closeLink()
+        nextCycleAt = now + POST_CLOSE_DELAY_MS
+        phase = Phase.WAITING
     }
 
     private fun abortScan() {
@@ -156,7 +188,7 @@ class HeartRateConnector(
 
     private fun tickOnce(now: Long) {
         when (phase) {
-            Phase.STOPPED -> Unit
+            Phase.STOPPED, Phase.PAUSED -> Unit
             Phase.NO_DEVICE -> if (loadSaved() != null) beginCycle(now)
             Phase.WAITING -> if (now >= nextCycleAt) beginCycle(now)
             Phase.CONNECTING -> tickConnecting(now)
@@ -169,14 +201,13 @@ class HeartRateConnector(
         val l = link ?: return fail(now)
         if (l.framesReceived > 0) { onFirstFrame(l, now); return }
         if (l.failed) {
-            Log.i(TAG, "link failed before first frame, giving up early")
-            closeLink()
-            if (attemptViaScan) fail(now) else startScan(now)
+            Log.i(TAG, "link failed before first frame, scanning again")
+            closeAndRescan(now); publishLost()
             return
         }
         if (now - attemptStartedAt >= CONNECT_TIMEOUT_MS) {
-            closeLink()
-            if (attemptViaScan) fail(now) else startScan(now)
+            Log.i(TAG, "connect timed out, scanning again")
+            closeAndRescan(now); publishLost()
         }
     }
 
@@ -185,29 +216,27 @@ class HeartRateConnector(
         everConnected = true; failures = 0
         lastFrames = l.framesReceived; lastFrameAt = now
         _bpm.value = l.bpm.value; _state.value = ConnectionState.Connected
-        val device = attempt
-        if (device != null && attemptViaScan && !attemptIsFallback && loadSaved() != device) {
-            runCatching { store.save(device) }.onFailure { Log.w(TAG, "saving rotated address failed", it) }
-        }
     }
 
     private fun tickScanning(now: Long) {
         val failure = scanFailure
         if (failure != null) { Log.w(TAG, "scan failed: $failure"); fail(now); return }
-        val savedDevice = loadSaved()
+        val savedDevice = loadSaved() ?: run { abortScan(); phase = Phase.NO_DEVICE; return }
         val match = found.firstOrNull { d ->
-            savedDevice != null && (d.address == savedDevice.address || (savedDevice.name != null && d.name == savedDevice.name))
+            d.address == savedDevice.address || (savedDevice.name != null && d.name == savedDevice.name)
         }
         if (match != null) {
             abortScan()
-            connectTo(SavedHrDevice(match.address, match.name ?: savedDevice?.name), now, viaScan = true, fallback = false)
+            val device = SavedHrDevice(match.address, match.name ?: savedDevice.name)
+            if (device != savedDevice) {
+                runCatching { store.save(device) }.onFailure { Log.w(TAG, "saving rotated address failed", it) }
+            }
+            connectTo(device, now)
             return
         }
-        if (now - scanStartedAt >= SCAN_WINDOW_MS) {
-            val first = found.firstOrNull()
+        if (now - scanStartedAt >= SCAN_REFRESH_MS) {
             abortScan()
-            if (first == null) fail(now)
-            else connectTo(SavedHrDevice(first.address, first.name), now, viaScan = true, fallback = true)
+            startScan(savedDevice, now)
         }
     }
 
@@ -229,21 +258,20 @@ class HeartRateConnector(
 
     private fun reconnectNow(now: Long, why: String) {
         Log.i(TAG, "reconnecting: $why")
-        closeLink()
         _bpm.value = null; publishLost()
         failures = 0
-        beginCycle(now)
+        closeAndRescan(now)
     }
 
     companion object {
         const val TAG = "BleHeartRate"
         const val TICK_MS = 500L
         const val CONNECT_TIMEOUT_MS = 8_000L
-        const val SCAN_WINDOW_MS = 6_000L
         const val POST_CLOSE_DELAY_MS = 2_500L
         const val SCAN_REFRESH_MS = 300_000L
         const val STALE_MS = 5_000L
-        const val DEAD_MS = 15_000L
+        /** Silence that tears the link down; the iPhone relay bursts, 60 s is the tunable if 45 s churns. */
+        const val DEAD_MS = 45_000L
         const val BACKOFF_BASE_MS = 2_000L
         const val BACKOFF_MAX_MS = 30_000L
     }

@@ -48,6 +48,7 @@ class HrPairingController(
                 finishScan(gen)
             }
         }
+        pairing.beginPairing()
         scanner.startScan(
             onDeviceFound = { onFound(gen, it) },
             onScanFailed = { onFailed(gen, it) },
@@ -63,6 +64,7 @@ class HrPairingController(
             if (!wasScanning) return
         }
         scanner.stopScan()
+        pairing.endPairing()
     }
 
     fun select(device: BleDevice) {
@@ -74,6 +76,7 @@ class HrPairingController(
         }
         if (wasScanning) scanner.stopScan()
         pairing.use(device)
+        if (wasScanning) pairing.endPairing()
         _state.value = PairingState.Paired(device)
     }
 
@@ -97,6 +100,7 @@ class HrPairingController(
             _state.value = PairingState.Failed(reason)
         }
         scanner.stopScan()
+        pairing.endPairing()
     }
 
     private fun finishScan(gen: Int) {
@@ -106,6 +110,7 @@ class HrPairingController(
             _state.value = PairingState.Done(sorted())
         }
         scanner.stopScan()
+        pairing.endPairing()
     }
 
     private fun sorted(): List<BleDevice> =
