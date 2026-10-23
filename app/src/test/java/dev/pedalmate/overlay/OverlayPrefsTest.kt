@@ -33,12 +33,7 @@ class OverlayPrefsTest {
     @After fun tearDown() { scope.cancel() }
 
     @Test fun defaults() = runBlocking {
-        assertEquals(OverlayPrefsState(false, null), prefs.load())
-    }
-
-    @Test fun minimizedPersists() = runBlocking {
-        prefs.setMinimized(true)
-        assertEquals(true, prefs.load().minimized)
+        assertEquals(OverlayPrefsState(null), prefs.load())
     }
 
     @Test fun positionPersists() = runBlocking {

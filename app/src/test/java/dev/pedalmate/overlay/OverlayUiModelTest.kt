@@ -49,7 +49,6 @@ class OverlayUiModelTest {
         assertEquals("92", m.cadenceText)
         assertEquals("41%", m.resistanceText)
         assertEquals(false, m.needsFtp)
-        assertEquals("Z5 \u00B7 281 W", m.pillText)
     }
 
     @Test fun peloton_fields_for_live_workout() {
@@ -109,15 +108,9 @@ class OverlayUiModelTest {
             assertEquals("--", m.cadenceText)
             assertEquals("--", m.resistanceText)
             assertNull(m.statusText)
-            assertEquals("NO SENSOR", m.pillText)
             assertEquals("263\u2013299 W", m.targetText)
             assertEquals("2:05", m.intervalTime)
         }
-    }
-
-    @Test fun pillNeverShowsWattsWhenBikeNotConnected() {
-        val m = OverlayUiModel.from(live().copy(bikeState = ConnectionState.Disconnected, smoothedPowerWatts = 183))
-        assertEquals("NO SENSOR", m.pillText)
     }
 
     @Test fun ftpNull() {
@@ -130,13 +123,11 @@ class OverlayUiModelTest {
         assertEquals("183", m.wattsText)
         assertEquals("Z2", m.targetText)
         assertTrue(m.needsFtp)
-        assertEquals("-- \u00B7 183 W", m.pillText)
     }
 
     @Test fun connectedNoReading() {
         val m = OverlayUiModel.from(live().copy(smoothedPowerWatts = null, currentZone = null))
         assertEquals("--", m.wattsText)
-        assertEquals("-- \u00B7 --", m.pillText)
     }
 
     @Test fun intervalNames() {

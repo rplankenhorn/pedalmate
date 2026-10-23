@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -21,7 +20,6 @@ data class Settings(
     val ftp: Int?,
     val lastWorkoutId: String?,
     val lichessPackage: String,
-    val overlayMinimized: Boolean,
     val overlayX: Int?,
     val overlayY: Int?,
     val overlayW: Int?,
@@ -33,7 +31,6 @@ data class Settings(
 private val FTP = intPreferencesKey("ftp")
 private val LAST_WORKOUT = stringPreferencesKey("lastWorkoutId")
 private val LICHESS_PKG = stringPreferencesKey("lichessPackage")
-private val OVERLAY_MIN = booleanPreferencesKey("overlayMinimized")
 private val OVERLAY_X = intPreferencesKey("overlayX")
 private val OVERLAY_Y = intPreferencesKey("overlayY")
 private val OVERLAY_W = intPreferencesKey("overlayW")
@@ -50,7 +47,6 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
                 ftp = p[FTP]?.takeIf { FtpCalculator.isValid(it) },
                 lastWorkoutId = p[LAST_WORKOUT],
                 lichessPackage = p[LICHESS_PKG]?.takeIf { it.isNotBlank() } ?: DEFAULT_LICHESS_PACKAGE,
-                overlayMinimized = p[OVERLAY_MIN] ?: false,
                 overlayX = p[OVERLAY_X],
                 overlayY = p[OVERLAY_Y],
                 overlayW = p[OVERLAY_W],
@@ -72,10 +68,6 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
     suspend fun setLichessPackage(pkg: String) {
         require(pkg.isNotBlank()) { "package name must not be blank" }
         dataStore.edit { it[LICHESS_PKG] = pkg }
-    }
-
-    suspend fun setOverlayMinimized(minimized: Boolean) {
-        dataStore.edit { it[OVERLAY_MIN] = minimized }
     }
 
     suspend fun setOverlayPosition(x: Int, y: Int, w: Int, h: Int) {

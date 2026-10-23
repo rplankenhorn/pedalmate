@@ -33,7 +33,6 @@ data class OverlayUiModel(
     val targetZone: PowerZone?,
     val zoneNumberText: String,
     val needsFtp: Boolean,
-    val pillText: String,
 ) {
     companion object {
         private fun ftpPercentText(watts: Int?, ftp: Int?): String =
@@ -73,11 +72,6 @@ data class OverlayUiModel(
             } else {
                 null
             }
-            val pillText = when {
-                !bikeLive -> NO_SENSOR
-                wattsText == "--" -> "$zoneChip \u00B7 --"
-                else -> "$zoneChip \u00B7 $wattsText W"
-            }
             return OverlayUiModel(
                 zoneChip = zoneChip,
                 zone = s.currentZone,
@@ -109,7 +103,6 @@ data class OverlayUiModel(
                 targetZone = s.targetZone ?: s.targetRange?.zone,
                 zoneNumberText = s.currentZone?.number?.toString() ?: "--",
                 needsFtp = s.ftp == null,
-                pillText = pillText,
             )
         }
     }
