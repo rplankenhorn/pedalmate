@@ -232,6 +232,7 @@ class HeartRateConnector(
         }
         if (match != null) {
             abortScan()
+            Log.i(TAG, "scan matched ${match.address} (${match.name})")
             val device = SavedHrDevice(match.address, match.name ?: savedDevice.name)
             if (device != savedDevice) {
                 runCatching { store.save(device) }.onFailure { Log.w(TAG, "saving rotated address failed", it) }
@@ -272,6 +273,7 @@ class HeartRateConnector(
         const val TAG = "BleHeartRate"
         const val TICK_MS = 500L
         const val CONNECT_TIMEOUT_MS = 8_000L
+        /** Exceeds [BleHeartRateDataSource]'s 2 s close fallback, so the next connectGatt never overlaps a pending close. */
         const val POST_CLOSE_DELAY_MS = 2_500L
         /** Floor between scan starts: 5 starts in 30 s trips Android's SCAN_FAILED_SCANNING_TOO_FREQUENTLY. */
         const val MIN_SCAN_INTERVAL_MS = 8_000L
