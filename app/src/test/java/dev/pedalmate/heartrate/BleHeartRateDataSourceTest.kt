@@ -39,12 +39,13 @@ class BleHeartRateDataSourceTest {
         var closeCount = 0
         var service: BluetoothGattService? = null
         var subscribed = 0
+        var enableResult = true
         override fun discoverServices(): Boolean { discoverCount++; return discoverResult }
         override fun refresh(): Boolean { refreshCount++; return true }
         override fun disconnect() { disconnectCount++ }
         override fun close() { closeCount++ }
         override fun getService(uuid: UUID): BluetoothGattService? = service
-        override fun enableNotifications(characteristic: BluetoothGattCharacteristic) { subscribed++ }
+        override fun enableNotifications(characteristic: BluetoothGattCharacteristic): Boolean { subscribed++; return enableResult }
     }
 
     private val gatt = FakeGatt()
@@ -61,6 +62,7 @@ class BleHeartRateDataSourceTest {
     private fun startConnected() {
         source.start()
         source.handleConnectionState(BluetoothProfile.STATE_CONNECTED)
+        advance(BleHeartRateDataSource.DISCOVER_DELAY_MS)
     }
 
     private fun advance(ms: Long) = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))
@@ -124,6 +126,7 @@ class BleHeartRateDataSourceTest {
     @Test fun `heart rate service present subscribes and delivers frames through the real callback`() {
         source.start()
         cb!!.onConnectionStateChange(null, 0, BluetoothProfile.STATE_CONNECTED)
+        advance(BleHeartRateDataSource.DISCOVER_DELAY_MS)
         assertEquals(1, gatt.discoverCount)
         gatt.service = hrServiceWithCharacteristic()
         cb!!.onServicesDiscovered(null, BluetoothGatt.GATT_SUCCESS)
@@ -165,5 +168,93 @@ class BleHeartRateDataSourceTest {
         gatt.discoverResult = false
         source.handleServicesDiscovered(BluetoothGatt.GATT_SUCCESS)
         assertTrue(source.failed)
+    }
+
+    @Test fun `discovery is deferred by 300 ms after CONNECTED`() {
+        source.start()
+        source.handleConnectionState(BluetoothProfile.STATE_CONNECTED)
+        assertEquals(0, gatt.discoverCount)
+        advance(299)
+        assertEquals(0, gatt.discoverCount)
+        advance(1)
+        assertEquals(1, gatt.discoverCount)
+    }
+
+    @Test fun `silent discovery is retried once after 3 s then fails after another 3 s`() {
+        startConnected()
+        advance(2_999)
+        assertEquals(1, gatt.discoverCount)
+        advance(1)
+        assertEquals(2, gatt.discoverCount)
+        assertFalse(source.failed)
+        advance(2_999)
+        assertFalse(source.failed)
+        advance(1)
+        assertTrue(source.failed)
+        assertEquals(2, gatt.discoverCount)
+    }
+
+    @Test fun `services discovered cancels the discovery retry`() {
+        startConnected()
+        gatt.service = hrServiceWithCharacteristic()
+        source.handleServicesDiscovered(BluetoothGatt.GATT_SUCCESS)
+        advance(10_000)
+        assertEquals(1, gatt.discoverCount)
+        assertFalse(source.failed)
+    }
+
+    @Test fun `stop before the delayed discovery fires never discovers`() {
+        source.start()
+        source.handleConnectionState(BluetoothProfile.STATE_CONNECTED)
+        source.stop()
+        advance(10_000)
+        assertEquals(0, gatt.discoverCount)
+        assertFalse(source.failed)
+    }
+
+    @Test fun `disconnect cancels the discovery retry`() {
+        startConnected()
+        source.handleConnectionState(BluetoothProfile.STATE_DISCONNECTED)
+        val discovers = gatt.discoverCount
+        advance(10_000)
+        assertEquals(discovers, gatt.discoverCount)
+    }
+
+    @Test fun `refresh rediscovery is also retried when silent`() {
+        startConnected()
+        source.handleServicesDiscovered(BluetoothGatt.GATT_SUCCESS) // no service: refresh + discover #2
+        assertEquals(2, gatt.discoverCount)
+        advance(3_000)
+        assertEquals(3, gatt.discoverCount)
+        advance(3_000)
+        assertTrue(source.failed)
+    }
+
+    @Test fun `descriptor write success marks subscribed`() {
+        startConnected()
+        source.handleDescriptorWrite(BluetoothGatt.GATT_SUCCESS)
+        assertTrue(source.subscribed)
+        assertFalse(source.failed)
+    }
+
+    @Test fun `descriptor write failure fails`() {
+        startConnected()
+        source.handleDescriptorWrite(5)
+        assertTrue(source.failed)
+        assertFalse(source.subscribed)
+    }
+
+    @Test fun `CCCD write not issued fails`() {
+        startConnected()
+        gatt.service = hrServiceWithCharacteristic()
+        gatt.enableResult = false
+        source.handleServicesDiscovered(BluetoothGatt.GATT_SUCCESS)
+        assertTrue(source.failed)
+    }
+
+    @Test fun `descriptor write through the real callback marks subscribed`() {
+        source.start()
+        cb!!.onDescriptorWrite(null, null, 0)
+        assertTrue(source.subscribed)
     }
 }

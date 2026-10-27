@@ -74,12 +74,31 @@ class BleHeartRateDataSource internal constructor(
     @Volatile private var refreshed = false
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val closeFallback = Runnable { closeNow() }
+    private var discoverRetried = false
+    private val discoverRunnable = Runnable {
+        discoverRetried = false
+        issueDiscover("discovering services")
+    }
+    private val discoverRetryRunnable = Runnable {
+        if (closing || gatt == null) return@Runnable
+        if (discoverRetried) {
+            fail("service discovery never completed")
+        } else {
+            discoverRetried = true
+            issueDiscover("service discovery silent for $DISCOVER_RETRY_MS ms, retrying")
+        }
+    }
+    @Volatile private var isSubscribed = false
+    override val subscribed: Boolean get() = isSubscribed
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt?, status: Int, newState: Int) =
             handleConnectionState(newState)
 
         override fun onServicesDiscovered(g: BluetoothGatt?, status: Int) = handleServicesDiscovered(status)
+
+        override fun onDescriptorWrite(g: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) =
+            handleDescriptorWrite(status)
 
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?) {
@@ -100,15 +119,13 @@ class BleHeartRateDataSource internal constructor(
         }
         when (newState) {
             BluetoothProfile.STATE_CONNECTED -> {
-                try {
-                    if (gatt?.discoverServices() == false) failRefused()
-                } catch (e: SecurityException) {
-                    Log.w(TAG, "discoverServices denied", e)
-                    hasFailed = true
-                    _connectionState.value = ConnectionState.Unavailable
-                }
+                // Not inline: on a fresh link the Bluetooth process has not registered the connection yet and
+                // silently drops discoverServices() ("No connection for ..."), so onServicesDiscovered never comes.
+                mainHandler.removeCallbacks(discoverRunnable)
+                mainHandler.postDelayed(discoverRunnable, DISCOVER_DELAY_MS)
             }
             BluetoothProfile.STATE_DISCONNECTED -> {
+                cancelDiscovery()
                 val wasEverConnected = _connectionState.value == ConnectionState.Connected
                 if (!wasEverConnected) hasFailed = true
                 _connectionState.value = if (wasEverConnected) ConnectionState.Disconnected else ConnectionState.Unavailable
@@ -117,8 +134,42 @@ class BleHeartRateDataSource internal constructor(
         }
     }
 
+    /** Calls discoverServices() now and arms the silence timer; refusal goes through [failRefused]. */
+    private fun issueDiscover(logMessage: String) {
+        val g = gatt ?: return
+        Log.i(TAG, logMessage)
+        try {
+            if (!g.discoverServices()) {
+                failRefused()
+                return
+            }
+            mainHandler.removeCallbacks(discoverRetryRunnable)
+            mainHandler.postDelayed(discoverRetryRunnable, DISCOVER_RETRY_MS)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "discoverServices denied", e)
+            hasFailed = true
+            _connectionState.value = ConnectionState.Unavailable
+        }
+    }
+
+    private fun cancelDiscovery() {
+        mainHandler.removeCallbacks(discoverRunnable)
+        mainHandler.removeCallbacks(discoverRetryRunnable)
+    }
+
+    internal fun handleDescriptorWrite(status: Int) {
+        if (closing) return
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            Log.i(TAG, "subscribed to Heart Rate Measurement")
+            isSubscribed = true
+        } else {
+            fail("CCCD write failed (status=$status)")
+        }
+    }
+
     internal fun handleServicesDiscovered(status: Int) {
         if (closing) return
+        mainHandler.removeCallbacks(discoverRetryRunnable)
         val g = gatt
         if (g == null) {
             fail("Heart Rate Measurement characteristic not found (status=$status)")
@@ -130,7 +181,8 @@ class BleHeartRateDataSource internal constructor(
                 refreshed = true
                 Log.i(TAG, "no Heart Rate service in the GATT db, refreshing")
                 g.refresh()
-                if (!g.discoverServices()) failRefused()
+                discoverRetried = false
+                issueDiscover("discovering services after refresh")
                 return
             }
             val characteristic = if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -142,7 +194,7 @@ class BleHeartRateDataSource internal constructor(
                 fail("Heart Rate Measurement characteristic not found (status=$status)")
                 return
             }
-            g.enableNotifications(characteristic)
+            if (!g.enableNotifications(characteristic)) fail("Heart Rate Measurement CCCD write not issued")
             // Stay Unavailable/Disconnected until a real frame arrives - see class doc.
         } catch (e: SecurityException) {
             Log.w(TAG, "Notification subscribe denied", e)
@@ -222,6 +274,7 @@ class BleHeartRateDataSource internal constructor(
         _connectionState.value = ConnectionState.Unavailable
         if (gatt == null || closing) return
         closing = true
+        cancelDiscovery()
         try {
             gatt?.disconnect()
         } catch (_: SecurityException) {
@@ -250,18 +303,24 @@ class BleHeartRateDataSource internal constructor(
         gatt = null
     }
 
-    private companion object {
-        const val TAG = "BleHeartRate"
+    companion object {
+        private const val TAG = "BleHeartRate"
+
+        /** Gives the Bluetooth process time to register a fresh connection before discoverServices(). */
+        const val DISCOVER_DELAY_MS = 300L
+
+        /** Silence after a discoverServices() call before it is repeated once (then the attempt fails). */
+        const val DISCOVER_RETRY_MS = 3_000L
 
         /**
          * Max wait for DISCONNECTED before close(). Below [HeartRateConnector.POST_CLOSE_DELAY_MS], so on the
          * retry paths (closeAndRescan/fail) the next connectGatt does not overlap a pending close; the
          * useDevice()/stop()->start() gap is tracked in bead pedalmate-vlo.
          */
-        const val CLOSE_FALLBACK_MS = 2_000L
+        private const val CLOSE_FALLBACK_MS = 2_000L
 
-        val HEART_RATE_SERVICE_UUID: UUID = UUID.fromString("0000180D-0000-1000-8000-00805F9B34FB")
-        val HEART_RATE_MEASUREMENT_UUID: UUID = UUID.fromString("00002A37-0000-1000-8000-00805F9B34FB")
+        private val HEART_RATE_SERVICE_UUID: UUID = UUID.fromString("0000180D-0000-1000-8000-00805F9B34FB")
+        private val HEART_RATE_MEASUREMENT_UUID: UUID = UUID.fromString("00002A37-0000-1000-8000-00805F9B34FB")
     }
 }
 
@@ -273,8 +332,8 @@ internal interface GattClient {
     fun disconnect()
     fun close()
     fun getService(uuid: UUID): BluetoothGattService?
-    /** Subscribes to notifications on [characteristic] (local flag plus the CCCD write). */
-    fun enableNotifications(characteristic: BluetoothGattCharacteristic)
+    /** Subscribes to notifications on [characteristic] (local flag plus the CCCD write); false if the write was not issued. */
+    fun enableNotifications(characteristic: BluetoothGattCharacteristic): Boolean
 }
 
 internal class RealGattClient(private val g: BluetoothGatt) : GattClient {
@@ -291,17 +350,15 @@ internal class RealGattClient(private val g: BluetoothGatt) : GattClient {
     override fun close() = g.close()
     override fun getService(uuid: UUID): BluetoothGattService? = g.getService(uuid)
 
-    override fun enableNotifications(characteristic: BluetoothGattCharacteristic) {
+    override fun enableNotifications(characteristic: BluetoothGattCharacteristic): Boolean {
         g.setCharacteristicNotification(characteristic, true)
         val descriptor = characteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805F9B34FB"))
-        if (descriptor != null) {
-            // The pre-API-33 CCCD-write path is deprecated, but minSdk is 29, so this is the
-            // form that works across this app's whole supported range.
-            @Suppress("DEPRECATION")
-            run {
-                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                g.writeDescriptor(descriptor)
-            }
-        }
+            ?: return false
+        // The pre-API-33 CCCD-write path is deprecated, but minSdk is 29, so this is the
+        // form that works across this app's whole supported range.
+        @Suppress("DEPRECATION")
+        descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+        @Suppress("DEPRECATION")
+        return g.writeDescriptor(descriptor)
     }
 }
