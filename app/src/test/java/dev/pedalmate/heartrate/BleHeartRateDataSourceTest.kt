@@ -2,6 +2,7 @@ package dev.pedalmate.heartrate
 
 import android.app.Application
 import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothProfile
@@ -32,12 +33,13 @@ class BleHeartRateDataSourceTest {
 
     private class FakeGatt : GattClient {
         var discoverCount = 0
+        var discoverResult = true
         var refreshCount = 0
         var disconnectCount = 0
         var closeCount = 0
         var service: BluetoothGattService? = null
         var subscribed = 0
-        override fun discoverServices(): Boolean { discoverCount++; return true }
+        override fun discoverServices(): Boolean { discoverCount++; return discoverResult }
         override fun refresh(): Boolean { refreshCount++; return true }
         override fun disconnect() { disconnectCount++ }
         override fun close() { closeCount++ }
@@ -47,9 +49,10 @@ class BleHeartRateDataSourceTest {
 
     private val gatt = FakeGatt()
     private val app = ApplicationProvider.getApplicationContext<Application>()
+    private var cb: BluetoothGattCallback? = null
     private val source = BleHeartRateDataSource(
         app, "00:11:22:33:44:55",
-    ) { _, _ -> gatt }
+    ) { _, callback -> cb = callback; gatt }
 
     private fun hrServiceWithCharacteristic() = BluetoothGattService(hrService, BluetoothGattService.SERVICE_TYPE_PRIMARY).also {
         it.addCharacteristic(BluetoothGattCharacteristic(hrMeasurement, BluetoothGattCharacteristic.PROPERTY_NOTIFY, 0))
@@ -71,6 +74,7 @@ class BleHeartRateDataSourceTest {
         assertEquals(0, gatt.closeCount)
         source.handleConnectionState(BluetoothProfile.STATE_DISCONNECTED)
         assertEquals(1, gatt.closeCount)
+        assertFalse(source.failed)
         source.handleNotification(byteArrayOf(0x00, 72))
         assertNull(source.bpm.value)
         assertEquals(0L, source.framesReceived)
@@ -114,16 +118,52 @@ class BleHeartRateDataSourceTest {
         source.handleServicesDiscovered(133)
         assertTrue(source.failed)
         assertEquals(0, gatt.refreshCount)
+        assertEquals(1, gatt.discoverCount)
     }
 
-    @Test fun `heart rate service present subscribes and delivers frames`() {
-        startConnected()
+    @Test fun `heart rate service present subscribes and delivers frames through the real callback`() {
+        source.start()
+        cb!!.onConnectionStateChange(null, 0, BluetoothProfile.STATE_CONNECTED)
+        assertEquals(1, gatt.discoverCount)
         gatt.service = hrServiceWithCharacteristic()
-        source.handleServicesDiscovered(BluetoothGatt.GATT_SUCCESS)
+        cb!!.onServicesDiscovered(null, BluetoothGatt.GATT_SUCCESS)
         assertEquals(1, gatt.subscribed)
         assertFalse(source.failed)
-        source.handleNotification(byteArrayOf(0x00, 72))
+        val c = BluetoothGattCharacteristic(hrMeasurement, BluetoothGattCharacteristic.PROPERTY_NOTIFY, 0)
+        @Suppress("DEPRECATION") c.value = byteArrayOf(0x00, 72)
+        @Suppress("DEPRECATION") cb!!.onCharacteristicChanged(null, c)
         assertEquals(72, source.bpm.value)
         assertEquals(1L, source.framesReceived)
+    }
+
+    @Test fun `double stop disconnects once`() {
+        startConnected()
+        source.stop(); source.stop()
+        assertEquals(1, gatt.disconnectCount)
+        advance(5_000)
+        assertEquals(1, gatt.closeCount)
+    }
+
+    @Test fun `late connected after stop re-issues disconnect and does not discover`() {
+        startConnected()
+        source.stop()
+        val discovers = gatt.discoverCount
+        source.handleConnectionState(BluetoothProfile.STATE_CONNECTED)
+        assertEquals(2, gatt.disconnectCount)
+        assertEquals(discovers, gatt.discoverCount)
+        assertEquals(0, gatt.closeCount)
+    }
+
+    @Test fun `discoverServices refused fails fast`() {
+        gatt.discoverResult = false
+        startConnected()
+        assertTrue(source.failed)
+    }
+
+    @Test fun `discoverServices refused after refresh fails fast`() {
+        startConnected()
+        gatt.discoverResult = false
+        source.handleServicesDiscovered(BluetoothGatt.GATT_SUCCESS)
+        assertTrue(source.failed)
     }
 }

@@ -69,9 +69,9 @@ class BleHeartRateDataSource internal constructor(
     @Volatile private var hasFailed = false
     override val failed: Boolean get() = hasFailed
 
-    private var gatt: GattClient? = null
+    @Volatile private var gatt: GattClient? = null
     @Volatile private var closing = false
-    private var refreshed = false
+    @Volatile private var refreshed = false
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val closeFallback = Runnable { closeNow() }
 
@@ -94,12 +94,14 @@ class BleHeartRateDataSource internal constructor(
     internal fun handleConnectionState(newState: Int) {
         if (closing) {
             if (newState == BluetoothProfile.STATE_DISCONNECTED) closeNow()
+            // A CONNECTED that lands after stop(): tear it down so the fallback never closes a live link.
+            if (newState == BluetoothProfile.STATE_CONNECTED) runCatching { gatt?.disconnect() }
             return
         }
         when (newState) {
             BluetoothProfile.STATE_CONNECTED -> {
                 try {
-                    gatt?.discoverServices()
+                    if (gatt?.discoverServices() == false) failRefused()
                 } catch (e: SecurityException) {
                     Log.w(TAG, "discoverServices denied", e)
                     hasFailed = true
@@ -128,7 +130,7 @@ class BleHeartRateDataSource internal constructor(
                 refreshed = true
                 Log.i(TAG, "no Heart Rate service in the GATT db, refreshing")
                 g.refresh()
-                g.discoverServices()
+                if (!g.discoverServices()) failRefused()
                 return
             }
             val characteristic = if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -152,6 +154,12 @@ class BleHeartRateDataSource internal constructor(
     internal fun handleNotification(bytes: ByteArray) {
         if (closing) return
         handleFrame(bytes)
+    }
+
+    private fun failRefused() {
+        Log.w(TAG, "discoverServices refused")
+        hasFailed = true
+        _connectionState.value = ConnectionState.Unavailable
     }
 
     private fun fail(message: String) {
@@ -222,7 +230,7 @@ class BleHeartRateDataSource internal constructor(
         mainHandler.postDelayed(closeFallback, CLOSE_FALLBACK_MS)
     }
 
-    private fun closeNow() {
+    @Synchronized private fun closeNow() {
         mainHandler.removeCallbacks(closeFallback)
         val g = gatt ?: return
         gatt = null
@@ -245,7 +253,11 @@ class BleHeartRateDataSource internal constructor(
     private companion object {
         const val TAG = "BleHeartRate"
 
-        /** Max wait for DISCONNECTED before close(); below [HeartRateConnector.POST_CLOSE_DELAY_MS] so the next connectGatt never overlaps it. */
+        /**
+         * Max wait for DISCONNECTED before close(). Below [HeartRateConnector.POST_CLOSE_DELAY_MS], so on the
+         * retry paths (closeAndRescan/fail) the next connectGatt does not overlap a pending close; the
+         * useDevice()/stop()->start() gap is tracked in bead pedalmate-vlo.
+         */
         const val CLOSE_FALLBACK_MS = 2_000L
 
         val HEART_RATE_SERVICE_UUID: UUID = UUID.fromString("0000180D-0000-1000-8000-00805F9B34FB")

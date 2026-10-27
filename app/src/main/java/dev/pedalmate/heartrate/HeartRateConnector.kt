@@ -273,7 +273,11 @@ class HeartRateConnector(
         const val TAG = "BleHeartRate"
         const val TICK_MS = 500L
         const val CONNECT_TIMEOUT_MS = 8_000L
-        /** Exceeds [BleHeartRateDataSource]'s 2 s close fallback, so the next connectGatt never overlaps a pending close. */
+        /**
+         * Exceeds [BleHeartRateDataSource]'s 2 s close fallback, so on the retry paths (closeAndRescan/fail)
+         * the next connectGatt does not overlap a pending close; the useDevice()/stop()->start() gap is
+         * tracked in bead pedalmate-vlo.
+         */
         const val POST_CLOSE_DELAY_MS = 2_500L
         /** Floor between scan starts: 5 starts in 30 s trips Android's SCAN_FAILED_SCANNING_TOO_FREQUENTLY. */
         const val MIN_SCAN_INTERVAL_MS = 8_000L
