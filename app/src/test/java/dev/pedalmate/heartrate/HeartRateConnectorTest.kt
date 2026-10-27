@@ -232,6 +232,39 @@ class HeartRateConnectorTest {
         assertEquals(1, factory.created.size)
     }
 
+    @Test fun `a subscribed link is not timed out by the 8 s rule and gets 15 s for its first frame`() {
+        hr.start()
+        scanner.emit(BleDevice("C", "HR-1")); tick(500)
+        val l = factory.created.last()
+        tick(1_500)
+        l.subscribed = true
+        tick(500) // subscribedAt = 2.5 s
+        tick(6_000) // 8.5 s after the attempt start
+        assertFalse(l.stopped)
+        tick(8_000) // 16.5 s, 14 s after subscribe
+        assertFalse(l.stopped)
+        tick(500) // 17 s, 14.5 s after subscribe
+        assertFalse(l.stopped)
+        tick(500) // 17.5 s, 15 s after subscribe
+        assertTrue(l.stopped)
+        assertEquals(1, scanner.startCount)
+        tick(2_500)
+        assertEquals(2, scanner.startCount)
+    }
+
+    @Test fun `a subscribed link that delivers a frame connects as before`() {
+        hr.start()
+        scanner.emit(BleDevice("C", "HR-1")); tick(500)
+        val l = factory.created.last()
+        tick(1_500)
+        l.subscribed = true
+        tick(5_000)
+        l.frame(80); tick(500)
+        assertEquals(ConnectionState.Connected, state)
+        assertEquals(80, bpm)
+        assertFalse(l.stopped)
+    }
+
     @Test fun `a scan-selected link that fails early rescans once the 8 s scan spacing has passed`() {
         hr.start()
         scanner.emit(BleDevice("C", "HR-1")); tick(500)

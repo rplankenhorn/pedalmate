@@ -49,6 +49,7 @@ class FakeLink(val address: String, val createdAtMs: Long) : HeartRateLink {
     override val connectionState: StateFlow<ConnectionState> = _state
     override var framesReceived = 0L; private set
     override var failed = false
+    override var subscribed = false
     var started = false; private set
     var stopped = false; private set
 

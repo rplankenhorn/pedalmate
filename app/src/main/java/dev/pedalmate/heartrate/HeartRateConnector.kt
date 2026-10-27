@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * saved address or name; the matched (possibly rotated) address is saved at match time. There is
  * no direct-connect first try, no first-device fallback and no unfiltered scan: replacing a strap
  * goes through PAIR HR STRAP. The scan is restarted every [SCAN_REFRESH_MS]. A connect that times
- * out ([CONNECT_TIMEOUT_MS]) or fails early, a link that drops, and a link silent for [DEAD_MS] are
+ * out ([CONNECT_TIMEOUT_MS] until the subscribe is confirmed, then [FIRST_FRAME_TIMEOUT_MS] for the first frame) or fails early, a link that drops, and a link silent for [DEAD_MS] are
  * closed and the scan resumes after [POST_CLOSE_DELAY_MS] (lets the stack release the GATT).
  * Rescans are at least [MIN_SCAN_INTERVAL_MS] apart and scan failures (permission, location
  * off, Bluetooth off) back off 2 s..30 s, which keeps the scanner under Android's 5-starts-per-30-s limit.
@@ -46,6 +46,7 @@ class HeartRateConnector(
     private var link: HeartRateLink? = null
     private var paused = false
     private var attemptStartedAt = 0L
+    private var subscribedAt = 0L
     private var scanActive = false
     private var scanStartedAt = 0L
     private var lastScanStartAt = Long.MIN_VALUE / 2
@@ -130,6 +131,7 @@ class HeartRateConnector(
             fail(now); return
         }
         attemptStartedAt = now
+        subscribedAt = 0L
         phase = Phase.CONNECTING
         Log.i(TAG, "connecting to ${device.address} (${device.name})")
     }
@@ -210,8 +212,14 @@ class HeartRateConnector(
             closeAndRescan(now); publishLost()
             return
         }
-        if (now - attemptStartedAt >= CONNECT_TIMEOUT_MS) {
-            Log.i(TAG, "connect timed out, scanning again")
+        if (l.subscribed && subscribedAt == 0L) subscribedAt = now
+        if (subscribedAt == 0L) {
+            if (now - attemptStartedAt >= CONNECT_TIMEOUT_MS) {
+                Log.i(TAG, "connect timed out, scanning again")
+                closeAndRescan(now); publishLost()
+            }
+        } else if (now - subscribedAt >= FIRST_FRAME_TIMEOUT_MS) {
+            Log.i(TAG, "no first frame $FIRST_FRAME_TIMEOUT_MS ms after subscribe, scanning again")
             closeAndRescan(now); publishLost()
         }
     }
@@ -273,6 +281,11 @@ class HeartRateConnector(
         const val TAG = "BleHeartRate"
         const val TICK_MS = 500L
         const val CONNECT_TIMEOUT_MS = 8_000L
+        /**
+         * After the subscribe is confirmed the first frame can be a full sample period away (the HeartCast
+         * relay notifies every ~5 s); 15 s covers two periods.
+         */
+        const val FIRST_FRAME_TIMEOUT_MS = 15_000L
         /**
          * Exceeds [BleHeartRateDataSource]'s 2 s close fallback, so on the retry paths (closeAndRescan/fail)
          * the next connectGatt does not overlap a pending close; the useDevice()/stop()->start() gap is

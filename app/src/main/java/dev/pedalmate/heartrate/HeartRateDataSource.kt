@@ -47,4 +47,10 @@ interface HeartRateLink : ManagedHeartRateDataSource {
      * denied. Never reset; the connector discards the link and starts a new one.
      */
     val failed: Boolean
+
+    /**
+     * True once the Heart Rate Measurement notification subscription (CCCD write) is confirmed; the first
+     * frame may still be a full sample period away.
+     */
+    val subscribed: Boolean get() = false
 }
