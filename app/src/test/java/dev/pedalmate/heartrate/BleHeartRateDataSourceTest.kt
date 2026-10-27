@@ -152,6 +152,7 @@ class BleHeartRateDataSourceTest {
         source.stop()
         val discovers = gatt.discoverCount
         source.handleConnectionState(BluetoothProfile.STATE_CONNECTED)
+        advance(BleHeartRateDataSource.DISCOVER_DELAY_MS)
         assertEquals(2, gatt.disconnectCount)
         assertEquals(discovers, gatt.discoverCount)
         assertEquals(0, gatt.closeCount)
@@ -212,7 +213,7 @@ class BleHeartRateDataSourceTest {
         assertFalse(source.failed)
     }
 
-    @Test fun `disconnect cancels the discovery retry`() {
+    @Test fun `after DISCONNECTED the released gatt is never rediscovered`() {
         startConnected()
         source.handleConnectionState(BluetoothProfile.STATE_DISCONNECTED)
         val discovers = gatt.discoverCount
@@ -256,5 +257,25 @@ class BleHeartRateDataSourceTest {
         source.start()
         cb!!.onDescriptorWrite(null, null, 0)
         assertTrue(source.subscribed)
+    }
+
+    @Test fun `a second services discovered callback after the retry does not fail the link`() {
+        startConnected()
+        advance(3_000) // retry issued
+        gatt.service = hrServiceWithCharacteristic()
+        source.handleServicesDiscovered(BluetoothGatt.GATT_SUCCESS)
+        gatt.enableResult = false
+        source.handleServicesDiscovered(BluetoothGatt.GATT_SUCCESS)
+        assertEquals(1, gatt.subscribed)
+        assertFalse(source.failed)
+        advance(10_000)
+        assertFalse(source.failed)
+    }
+
+    @Test fun `descriptor write after stop does not mark subscribed`() {
+        startConnected()
+        source.stop()
+        source.handleDescriptorWrite(BluetoothGatt.GATT_SUCCESS)
+        assertFalse(source.subscribed)
     }
 }

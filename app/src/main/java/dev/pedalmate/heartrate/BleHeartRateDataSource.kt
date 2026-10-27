@@ -40,12 +40,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * prevents even trying (bad address, missing permission, adapter absent). [start] never
  * throws.
  *
- * **Hardware caveat (T17/#17): this project has no physical BLE heart-rate strap.** This class
- * is built correctly against the public `android.bluetooth` GATT client APIs and the
- * Bluetooth SIG spec, but the actual connect -> discover -> subscribe -> notify sequence has
- * **not been exercised against a real strap** - that needs someone with a physical device to
- * confirm. [HeartRateParser]'s byte-level decoding, which this class merely feeds real GATT
- * bytes into, *is* independently unit-tested (see [HeartRateParserTest]).
+ * **Hardware:** the connect -> discover -> subscribe -> notify sequence has been exercised on the
+ * bike against the HeartCast relay on an iPhone (not a physical strap), and [DISCOVER_DELAY_MS] /
+ * [DISCOVER_RETRY_MS] and the connector's timeouts come from those measurements.
+ * [HeartRateParser]'s byte-level decoding is independently unit-tested (see [HeartRateParserTest]).
+ *
+ * [RealGattClient.enableNotifications] fails the link when the characteristic has no CCCD
+ * descriptor (previously silent).
  */
 class BleHeartRateDataSource internal constructor(
     private val context: Context,
@@ -74,13 +75,14 @@ class BleHeartRateDataSource internal constructor(
     @Volatile private var refreshed = false
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val closeFallback = Runnable { closeNow() }
-    private var discoverRetried = false
+    @Volatile private var discoverRetried = false
+    @Volatile private var discovered = false
     private val discoverRunnable = Runnable {
         discoverRetried = false
         issueDiscover("discovering services")
     }
     private val discoverRetryRunnable = Runnable {
-        if (closing || gatt == null) return@Runnable
+        if (closing || discovered || gatt == null) return@Runnable
         if (discoverRetried) {
             fail("service discovery never completed")
         } else {
@@ -136,6 +138,7 @@ class BleHeartRateDataSource internal constructor(
 
     /** Calls discoverServices() now and arms the silence timer; refusal goes through [failRefused]. */
     private fun issueDiscover(logMessage: String) {
+        if (closing) return
         val g = gatt ?: return
         Log.i(TAG, logMessage)
         try {
@@ -194,6 +197,9 @@ class BleHeartRateDataSource internal constructor(
                 fail("Heart Rate Measurement characteristic not found (status=$status)")
                 return
             }
+            // Sticky: a queued second discovery can deliver a second callback while the CCCD write is in flight.
+            if (discovered) return
+            discovered = true
             if (!g.enableNotifications(characteristic)) fail("Heart Rate Measurement CCCD write not issued")
             // Stay Unavailable/Disconnected until a real frame arrives - see class doc.
         } catch (e: SecurityException) {

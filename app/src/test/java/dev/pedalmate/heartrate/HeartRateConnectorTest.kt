@@ -239,7 +239,7 @@ class HeartRateConnectorTest {
         tick(1_500)
         l.subscribed = true
         tick(500) // subscribedAt = 2.5 s
-        tick(6_000) // 8.5 s after the attempt start
+        tick(6_000) // 8.0 s, 7.5 s after the attempt start
         assertFalse(l.stopped)
         tick(8_000) // 16.5 s, 14 s after subscribe
         assertFalse(l.stopped)
@@ -250,6 +250,16 @@ class HeartRateConnectorTest {
         assertEquals(1, scanner.startCount)
         tick(2_500)
         assertEquals(2, scanner.startCount)
+    }
+
+    @Test fun `a link that fails after subscribe rescans on the next tick`() {
+        hr.start()
+        scanner.emit(BleDevice("C", "HR-1")); tick(500)
+        val l = factory.created.last()
+        l.subscribed = true; tick(500)
+        assertFalse(l.stopped)
+        l.failNow(); tick(500)
+        assertTrue(l.stopped)
     }
 
     @Test fun `a subscribed link that delivers a frame connects as before`() {

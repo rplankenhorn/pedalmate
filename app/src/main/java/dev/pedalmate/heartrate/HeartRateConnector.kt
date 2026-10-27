@@ -15,7 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * saved address or name; the matched (possibly rotated) address is saved at match time. There is
  * no direct-connect first try, no first-device fallback and no unfiltered scan: replacing a strap
  * goes through PAIR HR STRAP. The scan is restarted every [SCAN_REFRESH_MS]. A connect that times
- * out ([CONNECT_TIMEOUT_MS] until the subscribe is confirmed, then [FIRST_FRAME_TIMEOUT_MS] for the first frame) or fails early, a link that drops, and a link silent for [DEAD_MS] are
+ * out ([CONNECT_TIMEOUT_MS] until the subscribe is confirmed, then [FIRST_FRAME_TIMEOUT_MS] for
+ * the first frame) or fails early, a link that drops, and a link silent for [DEAD_MS] are
  * closed and the scan resumes after [POST_CLOSE_DELAY_MS] (lets the stack release the GATT).
  * Rescans are at least [MIN_SCAN_INTERVAL_MS] apart and scan failures (permission, location
  * off, Bluetooth off) back off 2 s..30 s, which keeps the scanner under Android's 5-starts-per-30-s limit.
