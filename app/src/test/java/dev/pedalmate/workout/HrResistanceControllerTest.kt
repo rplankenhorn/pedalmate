@@ -224,6 +224,19 @@ class HrResistanceControllerTest {
         assertEquals(47, tick(44_000, hr = 125, res = 46, step = next))
     }
 
+    @Test fun `a stale delivered command is not a knob turn in the next step`() {
+        assertTrue(run(0, 19_750, hr = 115).isEmpty())
+        assertEquals(42, tick(20_000, hr = 115))
+        val next = StepRef(2, true, null)
+        assertNull(tick(20_250, hr = 115, res = 40, step = next))
+        c.onCommandResult(true)
+        assertNull(tick(21_000, hr = 115, res = 42, step = next))
+        assertEquals(ResistanceMode.AUTO, c.mode)
+        for (t in 21_250L until 40_250L step 250) assertNull(tick(t, hr = 115, res = 42, step = next))
+        assertEquals(ResistanceMode.AUTO, c.mode)
+        assertEquals(44, tick(40_250, hr = 115, res = 42, step = next))
+    }
+
     @Test fun `reset clears everything`() {
         commanded41()
         tick(23_000, hr = 125, res = 46)

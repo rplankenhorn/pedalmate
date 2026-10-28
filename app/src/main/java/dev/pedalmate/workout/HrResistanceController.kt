@@ -83,7 +83,15 @@ class HrResistanceController {
     fun onCommandResult(delivered: Boolean) {
         if (!inFlight) return
         inFlight = false
-        if (inFlightStale) return // the step changed while the command was out; its state is gone
+        if (inFlightStale) {
+            // The step changed while the command was out. If it landed, the knob will physically
+            // move to that value inside the new step, so it must not read as a manual turn.
+            if (delivered) {
+                commanded = inFlightValue
+                settleUntil = inFlightAt + SETTLE_MS
+            }
+            return
+        }
         if (delivered) {
             commanded = inFlightValue
             settleUntil = inFlightAt + SETTLE_MS
