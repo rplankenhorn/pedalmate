@@ -138,6 +138,10 @@ Added to the Stage 2 checklist in `docs/verification/phase-a.md`:
 - Turn the knob +5 by hand: `MANUAL`, no command for the grace; after grace the controller continues from the new value.
 - Cooldown sets 25; ride ends; Done panel as today.
 
+### Spike outcome (2026-10-28)
+
+PASS on the bike: `IBikeInterface.setResistance` from PedalMate moved the bike 33 → 38 → 33 within 5 s each, `delivered=true`, Peloton's `BikeServiceHelper` logged the write. No SecurityException. The debug RES ±5 row is kept in Sensor Diagnostics. `SETTLE_MS` stays 3 s (measured for a 5-unit move; the 2-unit settle time is on the rider checklist). With the knob untouched the reported resistance did not flicker over 90 s.
+
 ## Left to the builder
 
 - Exact constants beyond the stated invariants (tune on the emulator physiology model).
