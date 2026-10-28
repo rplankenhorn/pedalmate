@@ -180,6 +180,26 @@ class OverlayUiModelTest {
         assertEquals("MANUAL 1:05", OverlayUiModel.from(hr(ResistanceMode.MANUAL(65_000))).modeText)
     }
 
+    @Test fun manual_rounds_up_like_the_clock() {
+        assertEquals("MANUAL 0:01", OverlayUiModel.from(hr(ResistanceMode.MANUAL(1))).modeText)
+        assertEquals("MANUAL 0:00", OverlayUiModel.from(hr(ResistanceMode.MANUAL(0))).modeText)
+    }
+
+    @Test fun mode_row_joins_band_and_mode() {
+        assertEquals("HR 130\u2013140 \u00B7 AUTO", OverlayUiModel.from(hr(ResistanceMode.AUTO)).modeRowText)
+        assertEquals("HR 130\u2013140 \u00B7 HOLD \u00B7 no HR", OverlayUiModel.from(hr(ResistanceMode.HOLD_NO_HR)).modeRowText)
+    }
+
+    @Test fun mode_row_shows_the_band_alone_while_paused() {
+        assertEquals("HR 130\u2013140", OverlayUiModel.from(hr(ResistanceMode.PAUSED)).modeRowText)
+        assertEquals("HR 130\u2013140", OverlayUiModel.from(hr(null)).modeRowText)
+    }
+
+    @Test fun mode_row_is_the_mode_alone_on_a_resistance_step_and_absent_otherwise() {
+        assertEquals("AUTO", OverlayUiModel.from(base.copy(resistanceMode = ResistanceMode.AUTO, ftp = null)).modeRowText)
+        assertNull(OverlayUiModel.from(live()).modeRowText)
+    }
+
     @Test fun hold_reasons() {
         assertEquals("HOLD \u00B7 no HR", OverlayUiModel.from(hr(ResistanceMode.HOLD_NO_HR)).modeText)
         assertEquals("HOLD \u00B7 pedal", OverlayUiModel.from(hr(ResistanceMode.HOLD_NO_CADENCE)).modeText)

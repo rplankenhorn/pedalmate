@@ -35,6 +35,8 @@ data class OverlayUiModel(
     val zoneNumberText: String,
     val needsFtp: Boolean,
     val modeText: String?,
+    /** The mode-line row: HR band and/or resistance mode on an hrTarget step, else just the mode (power rides: mode only). */
+    val modeRowText: String? = null,
 ) {
     companion object {
         private fun ftpPercentText(watts: Int?, ftp: Int?): String =
@@ -54,6 +56,10 @@ data class OverlayUiModel(
             ResistanceMode.HOLD_NO_CADENCE -> "HOLD \u00B7 pedal"
             ResistanceMode.HOLD_NO_BIKE -> "HOLD \u00B7 no bike"
         }
+
+        /** Joins the HR band (hrTarget steps only) and the resistance mode with a middle dot; null when neither shows. */
+        internal fun modeRow(bandText: String?, modeText: String?): String? =
+            listOfNotNull(bandText, modeText).takeIf { it.isNotEmpty() }?.joinToString(" \u00B7 ")
 
         fun from(s: RideSnapshot): OverlayUiModel {
             val bikeLive = s.bikeState == ConnectionState.Connected
@@ -116,6 +122,7 @@ data class OverlayUiModel(
                 zoneNumberText = s.currentZone?.number?.toString() ?: "--",
                 needsFtp = s.ftp == null && s.resistanceMode == null,
                 modeText = modeText(s.resistanceMode),
+                modeRowText = modeRow(s.hrTarget?.let { formatBand(it) }, modeText(s.resistanceMode)),
             )
         }
     }
