@@ -44,11 +44,12 @@ class SetupViewModelTest {
 
     private val settings = SettingsStore(InMemoryPreferencesDataStore())
     private val snapshot = MutableStateFlow(RideSnapshot.idle(null))
+    private val hrState = MutableStateFlow<dev.pedalmate.sensor.ConnectionState>(dev.pedalmate.sensor.ConnectionState.Unavailable)
     private val commands = FakeCommands()
     private var installed: Set<String> = setOf("org.lichess.mobileV2")
 
     private fun vm(repoFiles: Map<String, String> = files) =
-        SetupViewModel(settings, WorkoutRepository(MemAssetReader(repoFiles)), snapshot, commands) { it in installed }
+        SetupViewModel(settings, WorkoutRepository(MemAssetReader(repoFiles)), snapshot, hrState, commands) { it in installed }
 
     @Before fun setUp() { Dispatchers.setMain(UnconfinedTestDispatcher()) }
     @After fun tearDown() { Dispatchers.resetMain() }
@@ -333,11 +334,49 @@ class SetupViewModelTest {
         v.select("hr-40")
         assertEquals(HR_NOT_CONNECTED, v.state.value.startWarning)
         assertTrue(v.state.value.canStart)
-        snapshot.value = snapshot.value.copy(hrState = dev.pedalmate.sensor.ConnectionState.Connected)
+        hrState.value = dev.pedalmate.sensor.ConnectionState.Connected
         assertNull(v.state.value.startWarning)
-        snapshot.value = snapshot.value.copy(hrState = dev.pedalmate.sensor.ConnectionState.Disconnected)
+        hrState.value = dev.pedalmate.sensor.ConnectionState.Disconnected
         v.select("t1")
         assertEquals("No FTP set: zones and targets will show dashes.", v.state.value.startWarning)
+    }
+
+    @Test
+    fun `a connected strap before any ride means no warning while the snapshot is idle`() = runTest {
+        settings.setFtp(250)
+        val v = vm(files + ("workouts/hr-40.json" to hr40))
+        assertEquals(dev.pedalmate.sensor.ConnectionState.Unavailable, snapshot.value.hrState)
+        hrState.value = dev.pedalmate.sensor.ConnectionState.Connected
+        v.select("hr-40")
+        assertNull(v.state.value.startWarning)
+    }
+
+    @Test
+    fun `a disconnected strap before any ride warns`() = runTest {
+        val v = vm(files + ("workouts/hr-40.json" to hr40))
+        hrState.value = dev.pedalmate.sensor.ConnectionState.Disconnected
+        v.select("hr-40")
+        assertEquals(HR_NOT_CONNECTED, v.state.value.startWarning)
+    }
+
+    @Test
+    fun `no hr target error before settings load`() = runTest {
+        val gate = vm().state.value
+        if (!gate.loaded) assertNull(gate.hrTargetError)
+    }
+
+    @Test
+    fun `editing one hr field pins only that field`() = runTest {
+        val v = vm()
+        v.onHrMaxChanged("150")
+        assertEquals(150, settings.settings.first().hrTargetMax)
+        // The other field still follows the stored value: a stored change shows up in it.
+        settings.setHrTarget(120, 150)
+        assertEquals("120", v.state.value.hrMinText)
+        assertEquals("150", v.state.value.hrMaxText)
+        v.onHrMinChanged("125")
+        assertEquals(125, settings.settings.first().hrTargetMin)
+        assertEquals(150, settings.settings.first().hrTargetMax)
     }
 
     @Test

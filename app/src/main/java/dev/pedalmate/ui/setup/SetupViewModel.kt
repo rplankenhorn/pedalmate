@@ -82,6 +82,8 @@ class SetupViewModel(
     private val settings: SettingsStore,
     workouts: WorkoutRepository,
     snapshot: StateFlow<RideSnapshot>,
+    /** Live strap state from the hub: the idle snapshot's own `hrState` is always Unavailable before a ride. */
+    hrState: StateFlow<ConnectionState>,
     private val commands: RideCommands,
     private val isInstalled: (String) -> Boolean,
 ) : ViewModel() {
@@ -104,10 +106,14 @@ class SetupViewModel(
     } + WorkoutChoice(FREE_RIDE_ID, "Free ride", "No target, just ride")
     private val loadErrors = loadResult.errors.map { "${it.key}: ${it.value}" }
 
-    val state: StateFlow<SetupUiState> = combine(settings.settings, local, snapshot) { s, l, snap -> build(s, l, snap) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, build(null, Local(), snapshot.value))
+    val state: StateFlow<SetupUiState> = combine(settings.settings, local, snapshot, hrState) { s, l, snap, hr -> build(s, l, snap, hr) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, build(null, Local(), snapshot.value, hrState.value))
 
-    private fun build(s: Settings?, l: Local, snap: RideSnapshot): SetupUiState {
+    /** Last settings the state was built from; lets an HR edit fall back to the stored value of the other field. */
+    private var lastSettings: Settings? = null
+
+    private fun build(s: Settings?, l: Local, snap: RideSnapshot, hr: ConnectionState): SetupUiState {
+        lastSettings = s
         val ftpText = l.ftpEdit ?: s?.ftp?.toString().orEmpty()
         val parse = FtpInput.parse(ftpText)
         val ftpError = (parse as? FtpParse.Invalid)?.reason
@@ -116,7 +122,7 @@ class SetupViewModel(
         }
         val hrMinText = l.hrMinEdit ?: s?.hrTargetMin?.toString().orEmpty()
         val hrMaxText = l.hrMaxEdit ?: s?.hrTargetMax?.toString().orEmpty()
-        val hrError = (HrTargetInput.parse(hrMinText, hrMaxText) as? HrTargetParse.Invalid)?.reason
+        val hrError = if (s == null) null else (HrTargetInput.parse(hrMinText, hrMaxText) as? HrTargetParse.Invalid)?.reason
         val selectedId = resolveSelected(s, l)
         val hrRide = choices.firstOrNull { it.id == selectedId }?.hrRide == true
         val active = snap.status == RideStatus.RUNNING || snap.status == RideStatus.PAUSED
@@ -136,7 +142,7 @@ class SetupViewModel(
             lichessPackageError = if (l.pkgEdit != null && l.pkgEdit.isBlank()) "Package name required" else null,
             rideStatus = snap.status, canStart = blocked == null, startBlockedReason = blocked,
             startWarning = when {
-                hrRide && snap.hrState != ConnectionState.Connected -> HR_NOT_CONNECTED
+                hrRide && hr != ConnectionState.Connected -> HR_NOT_CONNECTED
                 parse is FtpParse.Empty && !hrRide -> "No FTP set: zones and targets will show dashes."
                 !l.overlayGranted -> OVERLAY_MISSING
                 else -> null
@@ -168,10 +174,12 @@ class SetupViewModel(
     fun onHrMaxChanged(text: String) = onHrChanged(min = null, max = text)
 
     private fun onHrChanged(min: String?, max: String?) {
-        val cur = state.value
-        val minText = min ?: cur.hrMinText
-        val maxText = max ?: cur.hrMaxText
-        local.update { it.copy(hrMinEdit = minText, hrMaxEdit = maxText) }
+        // Pin only the edited field; the other keeps following the stored value until it is edited itself.
+        val l = local.value
+        val stored = lastSettings
+        val minText = min ?: l.hrMinEdit ?: stored?.hrTargetMin?.toString().orEmpty()
+        val maxText = max ?: l.hrMaxEdit ?: stored?.hrTargetMax?.toString().orEmpty()
+        local.update { it.copy(hrMinEdit = min ?: it.hrMinEdit, hrMaxEdit = max ?: it.hrMaxEdit) }
         // Only a valid pair is stored (setHrTarget requires it); otherwise the previous value stays.
         val p = HrTargetInput.parse(minText, maxText)
         if (p is HrTargetParse.Valid) viewModelScope.launch { settings.setHrTarget(p.min, p.max) }
@@ -263,6 +271,6 @@ class SetupViewModelFactory(
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return SetupViewModel(container.settings, container.workouts, container.session.snapshot, commands, isInstalled) as T
+        return SetupViewModel(container.settings, container.workouts, container.session.snapshot, container.hub.hr.connectionState, commands, isInstalled) as T
     }
 }
