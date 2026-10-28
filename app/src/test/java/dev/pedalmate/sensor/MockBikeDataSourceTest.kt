@@ -57,5 +57,25 @@ class MockBikeDataSourceTest {
         assertEquals(MockPhysics.watts(40, m.cadenceRpm), m.powerWatts)
     }
 
+    @Test fun `forced resistance holds a flat 80 rpm through the scripted dropout`() = runTest {
+        val src = MockBikeDataSource(ScriptedProfile(seed = 1), backgroundScope)
+        src.start(); runCurrent()
+        assertTrue(src.setResistance(40))
+        var t = 0L
+        while (t < 300_000L) {
+            advanceTimeBy(250); runCurrent(); t += 250
+            assertEquals(ConnectionState.Connected, src.connectionState.value)
+            assertEquals(80, src.metrics.value.cadenceRpm)
+            assertEquals(150, src.metrics.value.powerWatts)
+        }
+    }
+
+    @Test fun `without a forced resistance the scripted cadence and dropout stay`() = runTest {
+        val src = MockBikeDataSource(ScriptedProfile(seed = 1), backgroundScope)
+        src.start(); runCurrent()
+        advanceTimeBy(140_000L); runCurrent()
+        assertEquals(ConnectionState.Disconnected, src.connectionState.value)
+    }
+
     @Test fun `physics anchor is 150 W at 40 and 80 rpm`() { assertEquals(150, MockPhysics.watts(40, 80)) }
 }

@@ -15,7 +15,12 @@ object MockPhysics {
     fun watts(resistance: Int, cadence: Int): Int = (0.046875 * resistance * cadence).roundToInt()
 }
 
-/** Emulator stand-in for the Bike+: replays [profile] at [tickMs]; script time counts ticks, not wall time. */
+/**
+ * Emulator stand-in for the Bike+: replays [profile] at [tickMs]; script time counts ticks, not wall time.
+ *
+ * [setResistance] pins resistance, and with it a flat [FORCED_CADENCE_RPM] cadence and no scripted dropouts, until the
+ * next call; the pin survives [stop]/[start]. That keeps the emulator steady enough for the HR controller to hold a band.
+ */
 class MockBikeDataSource(
     private val profile: ScriptedProfile,
     private val scope: CoroutineScope,
@@ -39,10 +44,18 @@ class MockBikeDataSource(
         job = scope.launch {
             var tick = 0L
             while (isActive) {
+                val r = forcedResistance
                 val sample = profile.sample((tick * tickMs / 1_000L).toInt())
-                if (sample != null) {
-                    val r = forcedResistance
-                    _metrics.value = if (r != null) sample.copy(resistancePercent = r, powerWatts = MockPhysics.watts(r, sample.cadenceRpm)) else sample
+                if (r != null) {
+                    // Forced: flat cadence, and a scripted dropout keeps the last frame instead of going silent.
+                    _metrics.value = (sample ?: _metrics.value).copy(
+                        resistancePercent = r,
+                        cadenceRpm = FORCED_CADENCE_RPM,
+                        powerWatts = MockPhysics.watts(r, FORCED_CADENCE_RPM),
+                    )
+                    _state.value = ConnectionState.Connected
+                } else if (sample != null) {
+                    _metrics.value = sample
                     _state.value = ConnectionState.Connected
                 } else {
                     _state.value = ConnectionState.Disconnected   // metrics keep the stale value on purpose
@@ -58,5 +71,9 @@ class MockBikeDataSource(
         job?.cancel()
         job = null
         _state.value = ConnectionState.Unavailable
+    }
+
+    companion object {
+        const val FORCED_CADENCE_RPM = 80
     }
 }

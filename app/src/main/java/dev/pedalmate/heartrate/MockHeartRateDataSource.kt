@@ -50,6 +50,7 @@ class MockHeartRateDataSource(
                 if (power == null) {
                     _bpm.value = MockHeartRateProfile.bpmAt((tick * tickMs / 1_000L).toInt())
                 } else {
+                    // Frame 0 is the resting value; the lag only starts on the next tick.
                     if (tick > 0) bpm = MockPhysiology.step(bpm, MockPhysiology.targetBpm(power()), tickMs / 1000.0)
                     _bpm.value = bpm.roundToInt()
                 }
