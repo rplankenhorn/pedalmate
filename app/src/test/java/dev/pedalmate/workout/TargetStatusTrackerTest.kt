@@ -59,4 +59,30 @@ class TargetStatusTrackerTest {
         assertEquals(TargetStatus.IN, TargetStatusTracker().update(0, 297, z7))
         assertEquals(TargetStatus.BELOW, TargetStatusTracker().update(0, 296, z7))
     }
+
+    @Test fun `band 130 to 140 has no tolerance`() {
+        fun judged(v: Int): TargetStatus? {
+            val t = TargetStatusTracker()
+            t.updateBand(0, 135, 130..140)
+            t.updateBand(1_000, v, 130..140)
+            return t.updateBand(3_000, v, 130..140)
+        }
+        assertEquals(TargetStatus.BELOW, judged(129))
+        assertEquals(TargetStatus.IN, judged(130))
+        assertEquals(TargetStatus.IN, judged(140))
+        assertEquals(TargetStatus.ABOVE, judged(141))
+    }
+
+    @Test fun `a changed band is evaluated immediately`() {
+        val t = TargetStatusTracker()
+        assertEquals(TargetStatus.IN, t.updateBand(0, 135, 130..140))
+        assertEquals(TargetStatus.BELOW, t.updateBand(0, 135, 140..150))
+    }
+
+    @Test fun `null value or band resets`() {
+        val t = TargetStatusTracker()
+        assertEquals(TargetStatus.IN, t.updateBand(0, 135, 130..140))
+        assertNull(t.updateBand(100, null, 130..140))
+        assertNull(t.updateBand(200, 135, null))
+    }
 }
