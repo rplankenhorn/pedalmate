@@ -17,7 +17,7 @@ class BikeSourceSupervisor(
     private val source: PollableBikeDataSource,
     private val clock: () -> Long,
     private val scheduler: TickScheduler,
-) : BoundBikeDataSource {
+) : BoundBikeDataSource, BikeResistanceControl {
 
     override val metrics: StateFlow<BikeMetrics> get() = source.metrics
 
@@ -58,6 +58,10 @@ class BikeSourceSupervisor(
         everFrame = false
         _state.value = ConnectionState.Unavailable
     }
+
+    /** Forwards to the wrapped source. Outside the lock: it is a blocking binder call, like the poll. */
+    override fun setResistance(percent: Int): Boolean =
+        (source as? BikeResistanceControl)?.setResistance(percent) ?: false
 
     /** The blocking binder poll runs outside the lock so start()/stop() on the main thread never wait on it. */
     private fun onTick() {

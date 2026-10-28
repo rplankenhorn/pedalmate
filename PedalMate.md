@@ -87,7 +87,7 @@ RESISTANCE
 
 Once those three values update reliably on the actual bike, the major Peloton-specific technical risk has been addressed.
 
-The sensor integration should remain **read-only**. PedalMate does not need to send resistance or other hardware-control commands to the bike.
+The sensor integration is read-only except for one sanctioned write, `setResistance`, used by the HR ride to follow a heart-rate target (see `docs/superpowers/specs/2026-10-26-hr-ride-design.md`). It is isolated behind `BikeResistanceControl`; nothing else sends hardware-control commands.
 
 Because these are undocumented/internal Peloton interfaces, firmware updates could potentially change or break the integration. The sensor layer should therefore be isolated so it can be updated without changing the rest of the application.
 

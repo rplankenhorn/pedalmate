@@ -82,6 +82,15 @@ fun CueDebugRow(onPlay: (Cue) -> Unit, onPlayDelayed: (Cue) -> Unit) {
     }
 }
 
+/** Debug-only: nudges the bike resistance by 5 percent points either way from [current]. */
+@Composable
+fun ResistanceDebugRow(current: Int, onSet: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        CueButton("RES -5") { onSet((current - 5).coerceIn(0, 100)) }
+        CueButton("RES +5") { onSet((current + 5).coerceIn(0, 100)) }
+    }
+}
+
 @Composable
 private fun CueButton(label: String, onClick: () -> Unit) {
     Button(onClick = onClick, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {

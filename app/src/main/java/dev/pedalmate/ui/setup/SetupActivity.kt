@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -30,6 +31,7 @@ import dev.pedalmate.ride.RideService
 import dev.pedalmate.ride.RideStatus
 import dev.pedalmate.sensor.SensorFactory
 import dev.pedalmate.ui.debug.CueDebugRow
+import dev.pedalmate.ui.debug.ResistanceDebugRow
 import dev.pedalmate.ui.debug.SensorDebugScreen
 import dev.pedalmate.ui.theme.PedalMateTheme
 import kotlinx.coroutines.delay
@@ -104,6 +106,12 @@ class SetupActivity : ComponentActivity() {
                             onPlay = c.cuePlayer::play,
                             onPlayDelayed = { cue -> lifecycleScope.launch { delay(5_000); c.cuePlayer.play(cue) } },
                         )
+                        ResistanceDebugRow(m.resistancePercent) { v ->
+                            c.scope.launch {
+                                val ok = c.hub.resistance?.setResistance(v) ?: false
+                                Log.i("PedalMate", "debug setResistance($v) -> $ok")
+                            }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { diagnostics = false }) { Text("BACK") }
                         }

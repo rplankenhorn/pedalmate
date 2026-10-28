@@ -11,7 +11,7 @@ import org.junit.Test
 
 private val M = BikeMetrics(cadenceRpm = 87, resistancePercent = 44, powerWatts = 183)
 
-private class FakeSource : PollableBikeDataSource {
+private class FakeSource : PollableBikeDataSource, BikeResistanceControl {
     override val metrics = MutableStateFlow(BikeMetrics.ZERO)
     override val connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Unavailable)
     override var framesReceived: Long = 0L
@@ -20,6 +20,9 @@ private class FakeSource : PollableBikeDataSource {
     var started = 0
     var stopped = 0
     var onPoll: (() -> Unit)? = null
+    val commands = mutableListOf<Int>()
+    var accept = true
+    override fun setResistance(percent: Int): Boolean { commands += percent; return accept }
 
     override fun start() { started++ }
     override fun stop() { stopped++ }
@@ -41,6 +44,13 @@ class BikeSourceSupervisorTest {
     private val harness = TickHarness(clock, scheduler)
     private val supervisor = BikeSourceSupervisor(source, clock, scheduler)
     private val state get() = supervisor.connectionState.value
+
+    @Test fun `setResistance forwards to the source and returns its answer`() {
+        supervisor.start()
+        assertTrue(supervisor.setResistance(42)); assertEquals(listOf(42), source.commands)
+        source.accept = false
+        assertFalse(supervisor.setResistance(43)); assertEquals(listOf(42, 43), source.commands)
+    }
 
     @Test fun `start and stop drive source and scheduler`() {
         supervisor.start()

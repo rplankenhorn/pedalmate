@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.os.RemoteException
+import android.os.SystemClock
 import android.util.Log
 import com.onepeloton.affernetservice.BikeData
 import com.onepeloton.affernetservice.IBikeCallback
@@ -44,7 +45,7 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class PelotonBikeInterfaceDataSource(
     private val context: Context,
-) : PollableBikeDataSource {
+) : PollableBikeDataSource, BikeResistanceControl {
 
     private val _metrics = MutableStateFlow(BikeMetrics.ZERO)
     override val metrics: StateFlow<BikeMetrics> = _metrics.asStateFlow()
@@ -53,6 +54,7 @@ class PelotonBikeInterfaceDataSource(
     override val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
     private var service: IBikeInterface? = null
+    private var lastWriteWarnAt = 0L
 
     /** True once the service is bound and the [IBikeInterface] proxy is available. */
     val isServiceBound: Boolean get() = service != null
@@ -200,6 +202,27 @@ class PelotonBikeInterfaceDataSource(
         return decoded
     }
 
+    /**
+     * The one sanctioned write: asks the bike to move to [percent] resistance. True means the binder
+     * call was delivered, not that the motor arrived; the follow-up read of the target is only logged.
+     */
+    override fun setResistance(percent: Int): Boolean {
+        val s = service ?: return false
+        return try {
+            s.setResistance(percent)
+            val target = runCatching { s.targetResistance }.getOrNull()
+            Log.i(TAG, "setResistance($percent) delivered=true target=$target")
+            true
+        } catch (e: RemoteException) {
+            val now = SystemClock.elapsedRealtime()
+            if (lastWriteWarnAt == 0L || now - lastWriteWarnAt >= WRITE_WARN_EVERY_MS) {
+                lastWriteWarnAt = now
+                Log.w(TAG, "setResistance($percent) failed", e)
+            }
+            false
+        }
+    }
+
     /** Unbinds the service. Safe to call even if [start] never bound. */
     override fun stop() {
         started = false
@@ -212,6 +235,7 @@ class PelotonBikeInterfaceDataSource(
 
     private companion object {
         const val TAG = "PelotonBikeIface"
+        private const val WRITE_WARN_EVERY_MS = 60_000L
 
         const val SERVICE_PACKAGE = "com.onepeloton.affernetservice"
         const val SERVICE_ACTION = "com.onepeloton.affernetservice.IBikeInterface"

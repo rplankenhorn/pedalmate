@@ -8,18 +8,22 @@ import dev.pedalmate.ride.LiveAggregator
 import dev.pedalmate.ride.RideFrame
 import dev.pedalmate.ride.RideLog
 import dev.pedalmate.sensor.BikeMetrics
+import dev.pedalmate.sensor.BikeResistanceControl
 import dev.pedalmate.sensor.BoundBikeDataSource
 import dev.pedalmate.sensor.ConnectionState
 import dev.pedalmate.workout.AssetReader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-class FakeBike : BoundBikeDataSource {
+class FakeBike : BoundBikeDataSource, BikeResistanceControl {
     val metricsFlow = MutableStateFlow(BikeMetrics.ZERO)
     val stateFlow = MutableStateFlow<ConnectionState>(ConnectionState.Unavailable)
     override val metrics: StateFlow<BikeMetrics> = metricsFlow
     override val connectionState: StateFlow<ConnectionState> = stateFlow
     var started = 0; var stopped = 0
+    val commands = mutableListOf<Int>()
+    var accept = true
+    override fun setResistance(percent: Int): Boolean { commands += percent; return accept }
     override fun start() { started++ }
     override fun stop() { stopped++ }
     fun set(power: Int, cadence: Int = 80, resistance: Int = 30, state: ConnectionState = ConnectionState.Connected) {
