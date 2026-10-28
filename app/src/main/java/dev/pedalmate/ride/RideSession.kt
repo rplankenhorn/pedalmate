@@ -183,8 +183,9 @@ class RideSession(
         if (hub.hr.connectionState.value == ConnectionState.Connected) {
             hub.hr.bpm.value?.let { lastHr = it; lastHrAt = nowMs }
         }
-        controller?.let { c -> driveResistance(c, nowMs, live, e) }
-        val snap = buildSnapshot(nowMs)
+        val band = hrBandProvider()
+        controller?.let { c -> driveResistance(c, nowMs, live, e, band) }
+        val snap = buildSnapshot(nowMs, band)
         if (status == RideStatus.RUNNING) {
             rideLog.offer(RideFrame(snap.powerWatts, snap.cadenceRpm, snap.resistancePercent, snap.heartRateBpm, snap.currentZone?.number))
         }
@@ -192,10 +193,9 @@ class RideSession(
     }
 
     /** Runs one controller evaluation; a command is delivered off the tick (the bike write blocks). Caller holds the lock. */
-    private fun driveResistance(c: HrResistanceController, nowMs: Long, live: Boolean, e: WorkoutEngine?) {
+    private fun driveResistance(c: HrResistanceController, nowMs: Long, live: Boolean, e: WorkoutEngine?, band: IntRange) {
         val m = hub.bike.metrics.value
         val ctl = hub.resistance
-        val band = hrBandProvider()
         val cs = e?.state?.value?.currentStep
         val r = c.update(
             ControlInput(
@@ -210,10 +210,18 @@ class RideSession(
             ),
         ) ?: return
         if (ctl == null) { c.onCommandResult(false); return }
+        val hr = lastHr
         scope.launch {
-            val ok = ctl.setResistance(r)
+            val ok = try {
+                ctl.setResistance(r)
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                Log.w(TAG, "hr-control set=$r threw", ex)
+                false
+            }
             synchronized(this@RideSession) { c.onCommandResult(ok) }
-            Log.i(TAG, "hr-control set=$r delivered=$ok hr=$lastHr band=$band")
+            Log.i(TAG, "hr-control set=$r delivered=$ok hr=$hr band=$band")
         }
     }
 
@@ -250,9 +258,9 @@ class RideSession(
         try { withContext(NonCancellable) { rideLog.finish() } } catch (e: CancellationException) { throw e } catch (e: Exception) { Log.w(TAG, "ride finish failed", e) }
     }
 
-    private fun republish() { _snapshot.value = buildSnapshot(lastTickMs) }
+    private fun republish() { _snapshot.value = buildSnapshot(lastTickMs, hrBandProvider()) }
 
-    private fun buildSnapshot(nowMs: Long?): RideSnapshot {
+    private fun buildSnapshot(nowMs: Long?, band: IntRange): RideSnapshot {
         val ws = engine?.state?.value
         val bikeState = hub.bike.connectionState.value
         val live = bikeState == ConnectionState.Connected
@@ -265,7 +273,7 @@ class RideSession(
         val range = step?.wattRange
         val hrState = hub.hr.connectionState.value
         val snapshotHr = if (hrState == ConnectionState.Connected) hub.hr.bpm.value else null
-        val hrBand = if (step?.hrTarget == true) hrBandProvider() else null
+        val hrBand = if (step?.hrTarget == true) band else null
         val targetStatus = when {
             nowMs == null -> null
             hrBand != null -> tracker.updateBand(nowMs, snapshotHr, hrBand)

@@ -23,7 +23,8 @@ class FakeBike : BoundBikeDataSource, BikeResistanceControl {
     var started = 0; var stopped = 0
     val commands = mutableListOf<Int>()
     var accept = true
-    override fun setResistance(percent: Int): Boolean { commands += percent; return accept }
+    var throwOnSet = false
+    override fun setResistance(percent: Int): Boolean { commands += percent; if (throwOnSet) throw RuntimeException("binder"); return accept }
     override fun start() { started++ }
     override fun stop() { stopped++ }
     fun set(power: Int, cadence: Int = 80, resistance: Int = 30, state: ConnectionState = ConnectionState.Connected) {

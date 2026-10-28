@@ -408,15 +408,27 @@ class RideSessionTest {
         val s = newSession(); s.startWorkout("h")
         bike.set(power = 100, cadence = 80, resistance = 20)
         bike.accept = false
-        s.run(0, 9_000)
-        assertTrue(bike.commands.size >= 4)
-        assertTrue(bike.commands.all { it == 30 })
+        s.run(0, 1_750)
+        assertEquals(listOf(30), bike.commands)                    // refused, retry not due before 2 s
         assertFalse(s.snapshot.value.resistanceMode is ResistanceMode.MANUAL)
         bike.accept = true
-        s.run(9_250, 9_750)
-        val n = bike.commands.size
-        s.tick(9_750); assertEquals(n, bike.commands.size)         // delivered once, no more entry commands
-        assertEquals(30, bike.commands.last())
+        s.run(2_000, 9_750)
+        assertEquals(listOf(30, 30), bike.commands)                // retried once, delivered, then no more entry commands
+        assertFalse(s.snapshot.value.resistanceMode is ResistanceMode.MANUAL)
+    }
+
+    @Test fun `a throwing setResistance counts as undelivered and the ride keeps going`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("h")
+        bike.set(power = 100, cadence = 80, resistance = 20)
+        bike.throwOnSet = true
+        s.run(0, 1_750)
+        assertEquals(listOf(30), bike.commands)
+        s.run(2_000, 2_250)
+        assertEquals(listOf(30, 30), bike.commands)                // retried at +2 s, so the failure was reported
+        bike.throwOnSet = false
+        s.run(2_500, 5_000)
+        assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
+        assertEquals(5_000L, s.snapshot.value.elapsedMs)
     }
 
     @Test fun `pz-43 style workouts have no controller`() = runTest(UnconfinedTestDispatcher()) {

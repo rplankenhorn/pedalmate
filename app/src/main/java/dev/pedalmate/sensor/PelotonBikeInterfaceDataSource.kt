@@ -213,7 +213,7 @@ class PelotonBikeInterfaceDataSource(
             val target = runCatching { s.targetResistance }.getOrNull()
             Log.i(TAG, "setResistance($percent) delivered=true target=$target")
             true
-        } catch (e: RemoteException) {
+        } catch (e: Exception) {
             val now = SystemClock.elapsedRealtime()
             if (lastWriteWarnAt == 0L || now - lastWriteWarnAt >= WRITE_WARN_EVERY_MS) {
                 lastWriteWarnAt = now
