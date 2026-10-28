@@ -4,6 +4,7 @@ import dev.pedalmate.ride.RideSnapshot
 import dev.pedalmate.ride.RideStatus
 import dev.pedalmate.sensor.ConnectionState
 import dev.pedalmate.workout.PowerZone
+import dev.pedalmate.workout.ResistanceMode
 import dev.pedalmate.workout.TargetStatus
 import dev.pedalmate.workout.ZoneTable
 import kotlin.math.roundToInt
@@ -33,6 +34,7 @@ data class OverlayUiModel(
     val targetZone: PowerZone?,
     val zoneNumberText: String,
     val needsFtp: Boolean,
+    val modeText: String?,
 ) {
     companion object {
         private fun ftpPercentText(watts: Int?, ftp: Int?): String =
@@ -44,6 +46,15 @@ data class OverlayUiModel(
             return PowerZone.values().map { if (it.number == 1) "0" else table.rangeOf(it).lowWatts.toString() }
         }
 
+        private fun modeText(mode: ResistanceMode?): String? = when (mode) {
+            null, ResistanceMode.PAUSED -> null
+            ResistanceMode.AUTO -> "AUTO"
+            is ResistanceMode.MANUAL -> "MANUAL ${formatClock(mode.graceRemainingMs)}"
+            ResistanceMode.HOLD_NO_HR -> "HOLD \u00B7 no HR"
+            ResistanceMode.HOLD_NO_CADENCE -> "HOLD \u00B7 pedal"
+            ResistanceMode.HOLD_NO_BIKE -> "HOLD \u00B7 no bike"
+        }
+
         fun from(s: RideSnapshot): OverlayUiModel {
             val bikeLive = s.bikeState == ConnectionState.Connected
             val zoneChip = s.currentZone?.let { "Z${it.number}" } ?: "--"
@@ -51,6 +62,7 @@ data class OverlayUiModel(
             val w = s.workout
             val step = w?.currentStep
             val targetText = when {
+                s.hrTarget != null -> formatBand(s.hrTarget)
                 s.targetRange != null -> formatRange(s.targetRange)
                 s.targetZone != null -> "Z${s.targetZone.number}"
                 else -> null
@@ -102,7 +114,8 @@ data class OverlayUiModel(
                 zoneBoundaryLabels = zoneBoundaryLabels(s.ftp),
                 targetZone = s.targetZone ?: s.targetRange?.zone,
                 zoneNumberText = s.currentZone?.number?.toString() ?: "--",
-                needsFtp = s.ftp == null,
+                needsFtp = s.ftp == null && s.resistanceMode == null,
+                modeText = modeText(s.resistanceMode),
             )
         }
     }

@@ -14,3 +14,6 @@ fun formatRange(range: ZoneRange?): String = when {
     range.highWatts == null -> "Z${range.zone.number} \u2265 ${range.lowWatts} W"
     else -> "${range.lowWatts}\u2013${range.highWatts} W"
 }
+
+/** Formats a heart-rate band for display, e.g. `HR 130\u2013140`. */
+fun formatBand(band: IntRange): String = "HR ${band.first}\u2013${band.last}"

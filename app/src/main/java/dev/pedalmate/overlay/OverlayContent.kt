@@ -62,6 +62,7 @@ private fun Panel(model: OverlayUiModel, onOpenApp: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         IntervalStrip(model, onOpenApp)
+        if (model.modeText != null) Text(model.modeText, color = LabelGrey, fontSize = 14.sp)
         Box(Modifier.fillMaxWidth().height(1.dp).background(Divider))
         if (model.banner != null) {
             Text(model.banner, color = ZoneColors.Above, fontSize = 16.sp, fontWeight = FontWeight.Bold)

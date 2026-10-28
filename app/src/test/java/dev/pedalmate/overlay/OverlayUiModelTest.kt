@@ -4,6 +4,7 @@ import dev.pedalmate.ride.RideSnapshot
 import dev.pedalmate.ride.RideStatus
 import dev.pedalmate.sensor.ConnectionState
 import dev.pedalmate.workout.PowerZone
+import dev.pedalmate.workout.ResistanceMode
 import dev.pedalmate.workout.StepInfo
 import dev.pedalmate.workout.TargetStatus
 import dev.pedalmate.workout.WorkoutPhase
@@ -164,5 +165,34 @@ class OverlayUiModelTest {
         assertTrue(m.needsFtp)
         assertEquals("--", m.zoneChip)
         assertEquals("--", m.wattsText)
+    }
+
+    private fun hr(mode: ResistanceMode?) = base.copy(hrTarget = 130..140, resistanceMode = mode, ftp = null)
+
+    @Test fun hr_target_text_and_mode_line() {
+        val m = OverlayUiModel.from(hr(ResistanceMode.AUTO))
+        assertEquals("HR 130\u2013140", m.targetText)
+        assertEquals("AUTO", m.modeText)
+        assertNull(m.targetZone)
+    }
+
+    @Test fun manual_shows_grace_remaining() {
+        assertEquals("MANUAL 1:05", OverlayUiModel.from(hr(ResistanceMode.MANUAL(65_000))).modeText)
+    }
+
+    @Test fun hold_reasons() {
+        assertEquals("HOLD \u00B7 no HR", OverlayUiModel.from(hr(ResistanceMode.HOLD_NO_HR)).modeText)
+        assertEquals("HOLD \u00B7 pedal", OverlayUiModel.from(hr(ResistanceMode.HOLD_NO_CADENCE)).modeText)
+        assertEquals("HOLD \u00B7 no bike", OverlayUiModel.from(hr(ResistanceMode.HOLD_NO_BIKE)).modeText)
+    }
+
+    @Test fun paused_mode_has_no_mode_line() {
+        assertNull(OverlayUiModel.from(hr(ResistanceMode.PAUSED)).modeText)
+        assertNull(OverlayUiModel.from(live()).modeText)
+    }
+
+    @Test fun an_hr_ride_never_asks_for_ftp() {
+        assertEquals(false, OverlayUiModel.from(base.copy(ftp = null, resistanceMode = ResistanceMode.PAUSED)).needsFtp)
+        assertEquals(true, OverlayUiModel.from(base.copy(ftp = null, resistanceMode = null)).needsFtp)
     }
 }
