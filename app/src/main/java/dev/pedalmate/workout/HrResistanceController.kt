@@ -46,6 +46,7 @@ class HrResistanceController {
     private var entryRetryAt = 0L
     private var graceUntil: Long? = null
     private var lastManualObserved: Int? = null
+    private var preCommand: Int? = null
 
     // Cross-step state.
     private var holdSince: Long? = null
@@ -56,6 +57,7 @@ class HrResistanceController {
     private var inFlightAt = 0L
     private var inFlightIsEntry = false
     private var inFlightStale = false
+    private var inFlightPre: Int? = null
 
     /** One tick. Returns a resistance to command, or null. The caller must answer every non-null return with [onCommandResult]. */
     fun update(input: ControlInput): Int? {
@@ -89,12 +91,14 @@ class HrResistanceController {
             if (delivered) {
                 commanded = inFlightValue
                 settleUntil = inFlightAt + SETTLE_MS
+                preCommand = null
             }
             return
         }
         if (delivered) {
             commanded = inFlightValue
             settleUntil = inFlightAt + SETTLE_MS
+            preCommand = if (inFlightIsEntry) null else inFlightPre
             if (inFlightIsEntry) pendingEntry = null else lastAdjustAt = inFlightAt
         } else if (inFlightIsEntry) {
             entryRetryAt = inFlightAt + RETRY_MS
@@ -123,6 +127,7 @@ class HrResistanceController {
         entryRetryAt = 0L
         graceUntil = null
         lastManualObserved = null
+        preCommand = null
     }
 
     private fun startStep(step: StepRef?, now: Long) {
@@ -152,6 +157,12 @@ class HrResistanceController {
             }
         } else if (now >= settleUntil) {
             val reference = commanded ?: baseline ?: return
+            val pre = preCommand
+            if (pre != null && commanded != null) {
+                if (observed == reference) preCommand = null
+                // Still travelling toward the commanded value: not a knob turn.
+                if (observed > minOf(pre, reference) && observed < maxOf(pre, reference)) return
+            }
             if (abs(observed - reference) >= OVERRIDE_DELTA) {
                 graceUntil = now + GRACE_MS
                 lastManualObserved = observed
@@ -201,10 +212,14 @@ class HrResistanceController {
             else -> return null
         }
         val unit = if (error >= BIG_ERROR_BPM) 2 else 1
-        val target = (reference + direction * unit).coerceIn(AUTO_MIN, AUTO_MAX)
-        // Never move against the error (e.g. reference above AUTO_MAX while HR is low).
-        if ((target - reference) * direction <= 0) return null
-        return target
+        val stepped = reference + direction * unit
+        if (reference in AUTO_MIN..AUTO_MAX) {
+            val target = stepped.coerceIn(AUTO_MIN, AUTO_MAX)
+            return target.takeIf { (it - reference) * direction > 0 }
+        }
+        // Outside the rails (knob left there): never jump more than one unit, and only toward them.
+        val towardRails = if (reference > AUTO_MAX) direction < 0 else direction > 0
+        return stepped.takeIf { towardRails }
     }
 
     private fun startCommand(value: Int, now: Long, entry: Boolean): Int {
@@ -213,6 +228,7 @@ class HrResistanceController {
         inFlightValue = value
         inFlightAt = now
         inFlightIsEntry = entry
+        inFlightPre = commanded ?: baseline
         return value
     }
 

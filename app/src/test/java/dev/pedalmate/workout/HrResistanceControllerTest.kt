@@ -247,4 +247,70 @@ class HrResistanceControllerTest {
         assertEquals(50_000L to 41, run(50_000, 50_000, hr = 125).single())
         assertEquals(ResistanceMode.AUTO, c.mode)
     }
+
+    private fun commandFrom(observed: Int, hr: Int): Int? {
+        c = HrResistanceController(); obs = observed
+        tick(0, hr = hr)
+        return tick(20_000, hr = hr)
+    }
+
+    @Test fun `above the rails a high HR steps one unit toward them, not onto 70`() {
+        assertEquals(76, commandFrom(78, 150))
+        assertEquals(77, commandFrom(78, 141))
+    }
+
+    @Test fun `above the rails a low HR commands nothing and stays AUTO`() {
+        assertNull(commandFrom(78, 120))
+        assertEquals(ResistanceMode.AUTO, c.mode)
+    }
+
+    @Test fun `below the rails a low HR steps toward them and a high HR is ignored`() {
+        assertEquals(7, commandFrom(5, 120))
+        assertNull(commandFrom(5, 150))
+        assertEquals(ResistanceMode.AUTO, c.mode)
+    }
+
+    @Test fun `inside the rails a big error still coerces onto 70`() {
+        assertEquals(70, commandFrom(69, 115))
+        assertEquals(67, commandFrom(69, 155))
+    }
+
+    @Test fun `a value part-way to the commanded one is still settling`() {
+        obs = 30
+        assertEquals(20_000L to 32, run(0, 20_000, hr = 115).single())
+        assertNull(tick(24_000, hr = 125, res = 31))
+        assertEquals(ResistanceMode.AUTO, c.mode)
+        assertNull(tick(25_000, hr = 125, res = 31))
+        assertEquals(ResistanceMode.AUTO, c.mode)
+    }
+
+    @Test fun `a value on the far side of the pre-command one is a knob turn`() {
+        obs = 30
+        assertEquals(20_000L to 32, run(0, 20_000, hr = 115).single())
+        tick(24_000, hr = 125, res = 28)
+        assertTrue(c.mode is ResistanceMode.MANUAL)
+    }
+
+    @Test fun `a value beyond the commanded one is a knob turn`() {
+        obs = 30
+        assertEquals(20_000L to 32, run(0, 20_000, hr = 115).single())
+        tick(24_000, hr = 125, res = 35)
+        assertTrue(c.mode is ResistanceMode.MANUAL)
+    }
+
+    @Test fun `bursty HR that goes stale and returns resumes AUTO with no extra reset`() {
+        obs = 40
+        val cmds = mutableListOf<Long>()
+        var t = 0L
+        while (t <= 36_000) {
+            // Frame arrived at t=0 and again at t=35_000; the age climbs in between.
+            val age = if (t < 35_000) t else t - 35_000
+            val hr = if (t < 35_000) 135 else 125
+            val r = tick(t, hr = hr, age = age)
+            if (t in 30_250..34_750) assertEquals(ResistanceMode.HOLD_NO_HR, c.mode)
+            if (r != null) { cmds += t; deliver(r) }
+            t += 250
+        }
+        assertEquals(listOf(35_000L), cmds)
+    }
 }
