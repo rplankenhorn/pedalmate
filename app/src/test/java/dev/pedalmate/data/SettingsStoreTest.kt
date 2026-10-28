@@ -83,4 +83,24 @@ class SettingsStoreTest {
     @Test fun `last workout id`() = runBlocking {
         store.setLastWorkoutId("pz-43"); assertEquals("pz-43", now().lastWorkoutId)
     }
+
+    @Test fun `hr target defaults`() = runBlocking {
+        assertEquals(130, now().hrTargetMin); assertEquals(140, now().hrTargetMax)
+    }
+
+    @Test fun `hr target round trips`() = runBlocking {
+        store.setHrTarget(125, 135)
+        assertEquals(125, now().hrTargetMin); assertEquals(135, now().hrTargetMax)
+    }
+
+    @Test fun `invalid hr target throws and keeps old value`() = runBlocking {
+        store.setHrTarget(125, 135)
+        try { store.setHrTarget(130, 130); fail("expected IllegalArgumentException") } catch (_: IllegalArgumentException) { }
+        assertEquals(125, now().hrTargetMin); assertEquals(135, now().hrTargetMax)
+    }
+
+    @Test fun `stored invalid hr pair reads as defaults`() = runBlocking {
+        dataStore.edit { it[intPreferencesKey("hrTargetMin")] = 150; it[intPreferencesKey("hrTargetMax")] = 140 }
+        assertEquals(130, now().hrTargetMin); assertEquals(140, now().hrTargetMax)
+    }
 }

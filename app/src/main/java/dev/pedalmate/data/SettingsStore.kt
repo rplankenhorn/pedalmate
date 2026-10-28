@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
+import dev.pedalmate.ui.setup.HrTargetInput
 import dev.pedalmate.workout.FtpCalculator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -26,6 +27,8 @@ data class Settings(
     val overlayH: Int?,
     val hrAddress: String?,
     val hrName: String?,
+    val hrTargetMin: Int,
+    val hrTargetMax: Int,
 )
 
 private val FTP = intPreferencesKey("ftp")
@@ -37,12 +40,17 @@ private val OVERLAY_W = intPreferencesKey("overlayW")
 private val OVERLAY_H = intPreferencesKey("overlayH")
 private val HR_ADDRESS = stringPreferencesKey("hrAddress")
 private val HR_NAME = stringPreferencesKey("hrName")
+private val HR_TARGET_MIN = intPreferencesKey("hrTargetMin")
+private val HR_TARGET_MAX = intPreferencesKey("hrTargetMax")
 
 /** DataStore-backed settings. Create one instance per process. */
 class SettingsStore(private val dataStore: DataStore<Preferences>) {
     val settings: Flow<Settings> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { p ->
+            val hrMin = p[HR_TARGET_MIN]
+            val hrMax = p[HR_TARGET_MAX]
+            val hrValid = hrMin != null && hrMax != null && HrTargetInput.isValid(hrMin, hrMax)
             Settings(
                 ftp = p[FTP]?.takeIf { FtpCalculator.isValid(it) },
                 lastWorkoutId = p[LAST_WORKOUT],
@@ -53,6 +61,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
                 overlayH = p[OVERLAY_H],
                 hrAddress = p[HR_ADDRESS],
                 hrName = p[HR_NAME],
+                hrTargetMin = if (hrValid) hrMin!! else DEFAULT_HR_MIN,
+                hrTargetMax = if (hrValid) hrMax!! else DEFAULT_HR_MAX,
             )
         }
 
@@ -82,7 +92,14 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    suspend fun setHrTarget(min: Int, max: Int) {
+        require(HrTargetInput.isValid(min, max)) { "HR target invalid: $min..$max" }
+        dataStore.edit { it[HR_TARGET_MIN] = min; it[HR_TARGET_MAX] = max }
+    }
+
     companion object {
+        const val DEFAULT_HR_MIN = 130
+        const val DEFAULT_HR_MAX = 140
         const val DEFAULT_LICHESS_PACKAGE = "org.lichess.mobileV2"
 
         fun create(context: Context): SettingsStore =

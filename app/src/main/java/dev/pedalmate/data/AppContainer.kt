@@ -36,6 +36,8 @@ class AppContainer(context: Context) {
     val cuePlayer = CuePlayer(scope)
 
     @Volatile private var currentFtp: Int? = null
+    @Volatile private var currentHrBand: IntRange = SettingsStore.DEFAULT_HR_MIN..SettingsStore.DEFAULT_HR_MAX
+    val hrBandProvider: () -> IntRange = { currentHrBand }
     private val ftpLoaded = CompletableDeferred<Unit>()
     private val finalizer = scope.launch(Dispatchers.IO) {
         try {
@@ -46,7 +48,7 @@ class AppContainer(context: Context) {
     }
 
     init {
-        scope.launch { settings.settings.collect { currentFtp = it.ftp; ftpLoaded.complete(Unit) } }
+        scope.launch { settings.settings.collect { currentFtp = it.ftp; currentHrBand = it.hrTargetMin..it.hrTargetMax; ftpLoaded.complete(Unit) } }
     }
 
     /** Tests set this before the first [session] access (e.g. before a service binds to it) to record into a fake log. */
