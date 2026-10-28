@@ -35,6 +35,7 @@ class RideSession(
     private val ftpProvider: () -> Int?,
     private val scope: CoroutineScope,
     private val ready: suspend () -> Unit = {},
+    private val hrBandProvider: () -> IntRange = { 130..140 },
 ) {
     private val _snapshot = MutableStateFlow(RideSnapshot.idle(ftpProvider()))
     val snapshot: StateFlow<RideSnapshot> = _snapshot.asStateFlow()
@@ -56,6 +57,9 @@ class RideSession(
     private var finishJob: Job? = null   // the async finish launched when a workout completes; begin() joins it
     private val smoother = PowerSmoother()
     private val tracker = TargetStatusTracker()
+    private var controller: HrResistanceController? = null
+    private var lastHr: Int? = null
+    private var lastHrAt: Long? = null
 
     val isActive: Boolean
         @Synchronized get() = status == RideStatus.RUNNING || status == RideStatus.PAUSED
@@ -105,6 +109,8 @@ class RideSession(
                 zoneTable = ZoneTable.forFtp(ftp)
                 workoutName = def?.name
                 smoother.reset(); tracker.reset()
+                lastHr = null; lastHrAt = null
+                controller = if (def?.usesResistanceControl == true) HrResistanceController() else null
                 lastTickMs = null; freeElapsedMs = 0L
                 cueJob?.cancel(); cueJob = null
                 engine = null
@@ -174,11 +180,41 @@ class RideSession(
             status = RideStatus.FINISHED
             finishJob = scope.launch { safeFinish() }
         }
+        if (hub.hr.connectionState.value == ConnectionState.Connected) {
+            hub.hr.bpm.value?.let { lastHr = it; lastHrAt = nowMs }
+        }
+        controller?.let { c -> driveResistance(c, nowMs, live, e) }
         val snap = buildSnapshot(nowMs)
         if (status == RideStatus.RUNNING) {
             rideLog.offer(RideFrame(snap.powerWatts, snap.cadenceRpm, snap.resistancePercent, snap.heartRateBpm, snap.currentZone?.number))
         }
         _snapshot.value = snap
+    }
+
+    /** Runs one controller evaluation; a command is delivered off the tick (the bike write blocks). Caller holds the lock. */
+    private fun driveResistance(c: HrResistanceController, nowMs: Long, live: Boolean, e: WorkoutEngine?) {
+        val m = hub.bike.metrics.value
+        val ctl = hub.resistance
+        val band = hrBandProvider()
+        val cs = e?.state?.value?.currentStep
+        val r = c.update(
+            ControlInput(
+                nowMs = nowMs,
+                running = status == RideStatus.RUNNING,
+                step = cs?.let { StepRef(it.index, it.hrTarget, it.resistance) },
+                band = band,
+                hrBpm = lastHr,
+                hrAgeMs = lastHrAt?.let { nowMs - it },
+                cadenceRpm = if (live) m.cadenceRpm else null,
+                observedResistance = if (live && ctl != null) m.resistancePercent else null,
+            ),
+        ) ?: return
+        if (ctl == null) { c.onCommandResult(false); return }
+        scope.launch {
+            val ok = ctl.setResistance(r)
+            synchronized(this@RideSession) { c.onCommandResult(ok) }
+            Log.i(TAG, "hr-control set=$r delivered=$ok hr=$lastHr band=$band")
+        }
     }
 
     suspend fun stop() {
@@ -201,6 +237,8 @@ class RideSession(
             engine = null; zoneTable = null; rideFtp = null; workoutName = null
             status = RideStatus.IDLE; lastTickMs = null; freeElapsedMs = 0L
             smoother.reset(); tracker.reset()
+            controller?.reset(); controller = null
+            lastHr = null; lastHrAt = null
             _snapshot.value = RideSnapshot.idle(ftpProvider())
         }
         if (release) hub.release()
@@ -225,8 +263,14 @@ class RideSession(
         val currentZone = if (table != null && smoothed != null) table.zoneFor(smoothed) else null
         val step = ws?.currentStep
         val range = step?.wattRange
-        val targetStatus = if (nowMs != null) tracker.update(nowMs, smoothed, range) else null
         val hrState = hub.hr.connectionState.value
+        val snapshotHr = if (hrState == ConnectionState.Connected) hub.hr.bpm.value else null
+        val hrBand = if (step?.hrTarget == true) hrBandProvider() else null
+        val targetStatus = when {
+            nowMs == null -> null
+            hrBand != null -> tracker.updateBand(nowMs, snapshotHr, hrBand)
+            else -> tracker.update(nowMs, smoothed, range)
+        }
         // avg/max reflect frames recorded up to the previous tick (one-tick lag by design: offer() runs after this).
         val aggregates = rideLog.live()
         return RideSnapshot(
@@ -235,9 +279,12 @@ class RideSession(
             avgPowerWatts = aggregates?.avgPowerWatts, maxPowerWatts = aggregates?.maxPowerWatts,
             cadenceRpm = if (live) m.cadenceRpm else null,
             resistancePercent = if (live) m.resistancePercent else null,
-            heartRateBpm = if (hrState == ConnectionState.Connected) hub.hr.bpm.value else null,
+            heartRateBpm = snapshotHr,
             ftp = rideFtp, currentZone = currentZone, targetZone = step?.zone, targetRange = range,
             targetStatus = targetStatus, workout = ws, elapsedMs = ws?.totalElapsedMs ?: freeElapsedMs,
+            hrTarget = hrBand,
+            resistanceMode = controller?.mode,
+            heartRateAgeMs = if (nowMs != null) lastHrAt?.let { nowMs - it } else null,
         )
     }
 

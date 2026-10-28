@@ -235,7 +235,7 @@ class RideService : Service() {
                     Log.i(
                         "PedalMate",
                         "ride status=${s.status} step=${s.workout?.stepIndex} elapsed=${s.elapsedMs / 1000}s " +
-                            "bike=${s.bikeState} watts=${s.smoothedPowerWatts} zone=${s.currentZone} target=${s.targetStatus} hr=${s.heartRateBpm ?: "-"}",
+                            "bike=${s.bikeState} watts=${s.smoothedPowerWatts} zone=${s.currentZone} target=${s.targetStatus} hr=${s.heartRateBpm ?: "-"} res=${s.resistancePercent} mode=${s.resistanceMode}",
                     )
                 }
                 delay(tickerPeriodMs)

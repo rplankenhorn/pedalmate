@@ -1,6 +1,7 @@
 package dev.pedalmate.ride
 
 import dev.pedalmate.audio.Cue
+import dev.pedalmate.sensor.BoundBikeDataSource
 import dev.pedalmate.sensor.ConnectionState
 import dev.pedalmate.testutil.*
 import dev.pedalmate.workout.*
@@ -21,6 +22,9 @@ import org.junit.Test
 private const val WORKOUT =
     """{"id":"t","name":"Test","steps":[{"label":"Warm","seconds":10,"zone":2},{"label":"Hard","seconds":10,"zone":4}]}"""
 
+private const val HR_WORKOUT =
+    """{"id":"h","name":"HR","steps":[{"label":"Warm","seconds":10,"resistance":30},{"label":"Hold","seconds":600,"hrTarget":true},{"label":"Cool","seconds":10,"resistance":25}]}"""
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class RideSessionTest {
     private val bike = FakeBike()
@@ -28,10 +32,10 @@ class RideSessionTest {
     private val log = RecordingLog()
     private val cues = RecordingCues()
     private var ftp: Int? = 200      // FTP 200: Z1 0-109, Z2 110-149, Z3 150-179, Z4 180-209
-    private val repo = WorkoutRepository(MemAssetReader(mapOf("workouts/t.json" to WORKOUT)))
+    private val repo = WorkoutRepository(MemAssetReader(mapOf("workouts/t.json" to WORKOUT, "workouts/h.json" to HR_WORKOUT)))
 
-    private fun TestScope.newSession(ready: suspend () -> Unit = {}) =
-        RideSession(SensorHub(bike, hr), repo, log, cues, { ftp }, backgroundScope, ready)
+    private fun TestScope.newSession(ready: suspend () -> Unit = {}, band: () -> IntRange = { 130..140 }) =
+        RideSession(SensorHub(bike, hr), repo, log, cues, { ftp }, backgroundScope, ready, band)
 
     /** Ticks every 250 ms from [fromMs] to [toMs] inclusive. */
     private fun RideSession.run(fromMs: Long, toMs: Long) { var t = fromMs; while (t <= toMs) { tick(t); t += 250 } }
@@ -330,5 +334,114 @@ class RideSessionTest {
         assertEquals(RideStatus.RUNNING, s.snapshot.value.status)
         s.stop()
         assertEquals(StartResult.Started, s.startFreeRide())
+    }
+
+    @Test fun `an hr workout commands the warm-up resistance once the bike is live`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("h")
+        s.tick(0); assertTrue(bike.commands.isEmpty())             // bike Unavailable
+        bike.set(power = 100, resistance = 20)
+        s.tick(0); assertEquals(listOf(30), bike.commands)
+        s.run(250, 9_750); assertEquals(listOf(30), bike.commands)
+    }
+
+    @Test fun `the hold step raises resistance after 20 s when HR is low`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("h")
+        bike.set(power = 100, cadence = 80, resistance = 30)
+        s.run(0, 10_000)
+        hr.bpmFlow.value = 125; hr.stateFlow.value = ConnectionState.Connected
+        s.run(10_250, 29_750)
+        assertEquals(listOf(30), bike.commands)
+        s.tick(30_000)
+        assertEquals(31, bike.commands.last())
+        val snap = s.snapshot.value
+        assertEquals(ResistanceMode.AUTO, snap.resistanceMode)
+        assertEquals(130..140, snap.hrTarget)
+        assertEquals(TargetStatus.BELOW, snap.targetStatus)
+        assertNull(snap.targetRange); assertNull(snap.targetZone)
+    }
+
+    @Test fun `hr older than 30 s holds`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("h")
+        bike.set(power = 100, cadence = 80, resistance = 30)
+        hr.bpmFlow.value = 125; hr.stateFlow.value = ConnectionState.Connected
+        s.run(0, 11_750)
+        hr.bpmFlow.value = null; hr.stateFlow.value = ConnectionState.Disconnected
+        s.run(12_000, 45_000)
+        // The controller still used the remembered 125 at 30 s (age 18 s); it never commands again once the HR is stale.
+        assertEquals(listOf(30, 31), bike.commands)
+        s.run(45_250, 75_000)
+        assertEquals(listOf(30, 31), bike.commands)
+        val snap = s.snapshot.value
+        assertEquals(ResistanceMode.HOLD_NO_HR, snap.resistanceMode)
+        assertNull(snap.heartRateBpm)
+        assertEquals(75_000L - 11_750L, snap.heartRateAgeMs)
+    }
+
+    @Test fun `without a resistance control the mode is HOLD_NO_BIKE and nothing is commanded`() = runTest(UnconfinedTestDispatcher()) {
+        val readOnly = object : BoundBikeDataSource by bike {}
+        val s = RideSession(SensorHub(readOnly, hr), repo, log, cues, { ftp }, backgroundScope)
+        s.startWorkout("h")
+        bike.set(power = 100, cadence = 80, resistance = 30)
+        hr.bpmFlow.value = 125; hr.stateFlow.value = ConnectionState.Connected
+        s.run(0, 35_000)
+        assertTrue(bike.commands.isEmpty())
+        assertEquals(ResistanceMode.HOLD_NO_BIKE, s.snapshot.value.resistanceMode)
+    }
+
+    @Test fun `a live band change applies at the next evaluation without restarting the interval`() = runTest(UnconfinedTestDispatcher()) {
+        var band = 130..140
+        val s = newSession(band = { band }); s.startWorkout("h")
+        bike.set(power = 100, cadence = 80, resistance = 30)
+        hr.bpmFlow.value = 125; hr.stateFlow.value = ConnectionState.Connected
+        s.run(0, 30_000)
+        assertEquals(listOf(30, 31), bike.commands)
+        band = 140..150; hr.bpmFlow.value = 135
+        bike.set(power = 100, cadence = 80, resistance = 31)
+        s.run(30_250, 35_000)
+        assertEquals(140..150, s.snapshot.value.hrTarget)
+        assertEquals(TargetStatus.BELOW, s.snapshot.value.targetStatus)
+        s.run(35_250, 49_750); assertEquals(listOf(30, 31), bike.commands)
+        s.tick(50_000); assertEquals(listOf(30, 31, 32), bike.commands)
+    }
+
+    @Test fun `a false setResistance does not move the baseline`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("h")
+        bike.set(power = 100, cadence = 80, resistance = 20)
+        bike.accept = false
+        s.run(0, 9_000)
+        assertTrue(bike.commands.size >= 4)
+        assertTrue(bike.commands.all { it == 30 })
+        assertFalse(s.snapshot.value.resistanceMode is ResistanceMode.MANUAL)
+        bike.accept = true
+        s.run(9_250, 9_750)
+        val n = bike.commands.size
+        s.tick(9_750); assertEquals(n, bike.commands.size)         // delivered once, no more entry commands
+        assertEquals(30, bike.commands.last())
+    }
+
+    @Test fun `pz-43 style workouts have no controller`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("t")
+        bike.set(power = 130)
+        s.run(0, 19_000)
+        assertNull(s.snapshot.value.resistanceMode); assertNull(s.snapshot.value.hrTarget)
+        assertTrue(bike.commands.isEmpty())
+    }
+
+    @Test fun `stop sends nothing and clears controller state`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("h")
+        bike.set(power = 100, cadence = 80, resistance = 30)
+        hr.bpmFlow.value = 125; hr.stateFlow.value = ConnectionState.Connected
+        s.run(0, 15_000)
+        val before = bike.commands.toList()
+        s.stop()
+        assertEquals(before, bike.commands)
+        assertEquals(RideSnapshot.idle(ftp), s.snapshot.value)
+    }
+
+    @Test fun `cues are unchanged by hr steps`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("h")
+        bike.set(power = 100, cadence = 80, resistance = 30)
+        s.tick(0); s.skip(); s.tick(250); s.skip(); s.tick(500); s.skip(); s.tick(750)
+        assertEquals(listOf(Cue.START, Cue.STEP_SAME, Cue.STEP_SAME, Cue.FINISH), cues.played)
     }
 }

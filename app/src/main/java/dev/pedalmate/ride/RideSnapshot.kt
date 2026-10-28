@@ -2,6 +2,7 @@ package dev.pedalmate.ride
 
 import dev.pedalmate.sensor.ConnectionState
 import dev.pedalmate.workout.PowerZone
+import dev.pedalmate.workout.ResistanceMode
 import dev.pedalmate.workout.TargetStatus
 import dev.pedalmate.workout.WorkoutState
 import dev.pedalmate.workout.ZoneRange
@@ -32,6 +33,9 @@ data class RideSnapshot(
     val targetStatus: TargetStatus?,
     val workout: WorkoutState?,
     val elapsedMs: Long,
+    val hrTarget: IntRange? = null,
+    val resistanceMode: ResistanceMode? = null,
+    val heartRateAgeMs: Long? = null,
 ) {
     companion object {
         fun idle(ftp: Int? = null) = RideSnapshot(

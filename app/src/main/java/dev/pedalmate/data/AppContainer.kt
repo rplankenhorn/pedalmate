@@ -61,6 +61,7 @@ class AppContainer(context: Context) {
             rideLog = rideLogOverride ?: RideRecorder(database.rideDao(), database.sampleDao(), { System.currentTimeMillis() }, scope),
             cues = cuePlayer, ftpProvider = { currentFtp }, scope = scope,
             ready = { finalizer.join(); ftpLoaded.await() },
+            hrBandProvider = hrBandProvider,
         )
     }
 }
