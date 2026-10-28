@@ -11,7 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
 enum class WorkoutPhase { IDLE, RUNNING, PAUSED, FINISHED }
 
 /** Display-ready description of one workout step; [wattRange] is null without a zone or FTP. */
-data class StepInfo(val index: Int, val label: String, val zone: PowerZone?, val wattRange: ZoneRange?, val seconds: Int)
+data class StepInfo(
+    val index: Int, val label: String, val zone: PowerZone?, val wattRange: ZoneRange?, val seconds: Int,
+    val hrTarget: Boolean = false, val resistance: Int? = null,
+)
 
 /** Immutable snapshot of workout progress. */
 data class WorkoutState(
@@ -38,7 +41,8 @@ class WorkoutEngine(definition: WorkoutDefinition, zoneTable: ZoneTable?) {
 
     private val steps: List<StepInfo> = definition.steps.mapIndexed { i, s ->
         val zone = s.zone?.let { PowerZone.fromNumber(it) }
-        StepInfo(i, s.label, zone, if (zone != null && zoneTable != null) zoneTable.rangeOf(zone) else null, s.seconds)
+        StepInfo(i, s.label, zone, if (zone != null && zoneTable != null) zoneTable.rangeOf(zone) else null, s.seconds,
+            s.hrTarget, s.resistance)
     }
     private val stepMs: List<Long> = steps.map { it.seconds * 1_000L }
     private val startsAtMs: List<Long> = stepMs.runningFold(0L) { a, b -> a + b }.dropLast(1)

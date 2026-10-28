@@ -168,4 +168,16 @@ class WorkoutEngineTest {
             assertFalse("${it.name} imports android", it.readText().contains("import android"))
         }
     }
+
+    @Test fun `hrTarget and resistance steps map into StepInfo`() {
+        val e = WorkoutEngine(def(WorkoutStep("Res", 10, resistance = 30), WorkoutStep("HR", 10, hrTarget = true)), ftp200)
+        e.start()
+        val s = e.state.value
+        assertEquals(30, s.currentStep!!.resistance)
+        assertFalse(s.currentStep!!.hrTarget)
+        val hr = s.nextStep!!
+        assertTrue(hr.hrTarget)
+        assertNull(hr.zone)
+        assertNull(hr.wattRange)
+    }
 }

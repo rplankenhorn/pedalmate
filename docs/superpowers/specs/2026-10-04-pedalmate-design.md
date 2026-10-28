@@ -230,5 +230,7 @@ Workouts are JSON files under `app/src/main/assets/workouts/`; the file name wit
 | `steps[].seconds` | int | yes | 1..21600 |
 | `steps[].zone` | int | no | omitted/null (no target) or 1..7 |
 | `steps[].tag` | string | no | non-blank, at most 20 chars; `"ftp-window"` marks the 20-minute FTP test window (used in Phase B) |
+| `steps[].hrTarget` | boolean | no | default false; the step holds the heart-rate target by adjusting resistance |
+| `steps[].resistance` | int | no | 0..100; fixed bike resistance for the step |
 
-Validation: unknown JSON keys are ignored; missing required keys are an error; all violations are collected and reported together. Zone is explicit per step; null zone means no power target. Zone is never inferred from the label.
+Validation: unknown JSON keys are ignored; missing required keys are an error; all violations are collected and reported together. Zone is explicit per step; null zone means no power target. Zone is never inferred from the label. A step has at most one of `zone`, `hrTarget`, `resistance`.

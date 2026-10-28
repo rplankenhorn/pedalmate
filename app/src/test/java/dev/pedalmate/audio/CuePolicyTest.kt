@@ -26,6 +26,14 @@ class CuePolicyTest {
     @Test fun sameZoneIsSame() = assertEquals(Cue.STEP_SAME, change(PowerZone.Z3, PowerZone.Z3))
     @Test fun nullToZoneIsSame() = assertEquals(Cue.STEP_SAME, change(null, PowerZone.Z3))
     @Test fun zoneToNullIsSame() = assertEquals(Cue.STEP_SAME, change(PowerZone.Z3, null))
+    @Test fun hrTargetStepIsSame() {
+        val z2 = StepInfo(0, "z", PowerZone.Z2, null, 60)
+        val hr = StepInfo(1, "hr", null, null, 60, hrTarget = true)
+        val res = StepInfo(2, "res", null, null, 60, resistance = 25)
+        assertEquals(Cue.STEP_SAME, CuePolicy.cueFor(WorkoutEvent.IntervalChanged(z2, hr)))
+        assertEquals(Cue.STEP_SAME, CuePolicy.cueFor(WorkoutEvent.IntervalChanged(hr, res)))
+    }
+
     @Test fun nullToNullIsSame() = assertEquals(Cue.STEP_SAME, change(null, null))
     @Test fun fullSpanIsHarder() = assertEquals(Cue.STEP_HARDER, change(PowerZone.Z1, PowerZone.Z7))
 

@@ -1,0 +1,10 @@
+{
+  "id": "hr-40",
+  "name": "HR 40",
+  "description": "Easy warm-up 5:00, hold the HR target 30:00, cooldown 5:00. Resistance follows heart rate.",
+  "steps": [
+    { "label": "Warm-up",   "seconds": 300,  "resistance": 30 },
+    { "label": "HR target", "seconds": 1800, "hrTarget": true },
+    { "label": "Cooldown",  "seconds": 300,  "resistance": 25 }
+  ]
+}

@@ -71,7 +71,7 @@ class WorkoutRepositoryTest {
     @Test fun `presets load without errors and ids match file names`() {
         val result = presets.load()
         assertTrue(result.errors.toString(), result.errors.isEmpty())
-        assertEquals(setOf("intro-20", "endurance-z2-45", "pz-43", "ftp-test"), result.workouts.map { it.id }.toSet())
+        assertEquals(setOf("intro-20", "endurance-z2-45", "pz-43", "ftp-test", "hr-40"), result.workouts.map { it.id }.toSet())
     }
 
     @Test fun `preset durations`() {
@@ -79,6 +79,8 @@ class WorkoutRepositoryTest {
         assertEquals(2700, presets.byId("endurance-z2-45")!!.totalSeconds)
         assertEquals(2580, presets.byId("pz-43")!!.totalSeconds)
         assertEquals(2100, presets.byId("ftp-test")!!.totalSeconds)
+        assertEquals(2400, presets.byId("hr-40")!!.totalSeconds)
+        assertTrue(presets.byId("hr-40")!!.usesResistanceControl)
     }
 
     @Test fun `pz-43 zones and labels`() {

@@ -23,6 +23,38 @@ class WorkoutDefinitionTest {
         assertEquals(d, WorkoutJson.parse(WorkoutJson.encode(d)))
     }
 
+    @Test fun `round trip keeps hrTarget and resistance`() {
+        val d = WorkoutDefinition(
+            "x", "X", null,
+            listOf(
+                WorkoutStep("A", 60, resistance = 30),
+                WorkoutStep("B", 60, hrTarget = true),
+                WorkoutStep("C", 60, 2),
+            ),
+        )
+        val back = WorkoutJson.parse(WorkoutJson.encode(d))
+        assertEquals(d, back)
+        assertEquals(30, back.steps[0].resistance)
+        assertTrue(back.steps[1].hrTarget)
+        assertTrue(back.usesResistanceControl)
+    }
+
+    @Test fun `a step may carry at most one of zone hrTarget resistance`() {
+        val d = def(
+            steps = listOf(
+                WorkoutStep("A", 60, zone = 2, hrTarget = true),
+                WorkoutStep("B", 60, resistance = 101),
+            ),
+        )
+        val errors = d.validate()
+        assertTrue(errors.toString(), "step 1: at most one of zone, hrTarget, resistance" in errors)
+        assertTrue(errors.toString(), "step 2: resistance must be 0..100 (was 101)" in errors)
+    }
+
+    @Test fun `pz-43 does not use resistance control`() {
+        assertEquals(false, def().usesResistanceControl)
+    }
+
     @Test fun `totalSeconds sums steps`() {
         val d = def(steps = listOf(step(seconds = 600), step(seconds = 300), step(seconds = 300)))
         assertEquals(1200, d.totalSeconds)
