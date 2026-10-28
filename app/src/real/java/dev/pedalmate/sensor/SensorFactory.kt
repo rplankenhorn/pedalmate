@@ -24,7 +24,7 @@ object SensorFactory {
             scheduler = CoroutineTickScheduler(scope),
         )
 
-    fun createHeartRateSource(context: Context, scope: CoroutineScope, store: SavedHrDeviceStore): ManagedHeartRateDataSource =
+    fun createHeartRateSource(context: Context, scope: CoroutineScope, store: SavedHrDeviceStore, @Suppress("UNUSED_PARAMETER") bike: BoundBikeDataSource): ManagedHeartRateDataSource =
         HeartRateConnector(
             scanner = AndroidBleScanner(context.applicationContext),
             linkFactory = { address -> BleHeartRateDataSource(context.applicationContext, address) },

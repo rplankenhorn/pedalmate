@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -45,4 +46,16 @@ class MockBikeDataSourceTest {
         assertEquals(ConnectionState.Unavailable, src.connectionState.value)
         assertEquals(frozen, src.metrics.value)
     }
+
+    @Test fun `after setResistance the frame holds that resistance and physics power`() = runTest {
+        val src = MockBikeDataSource(ScriptedProfile(seed = 1, dropouts = false), backgroundScope)
+        src.start(); runCurrent()
+        assertTrue(src.setResistance(40))
+        advanceTimeBy(250); runCurrent()
+        val m = src.metrics.value
+        assertEquals(40, m.resistancePercent)
+        assertEquals(MockPhysics.watts(40, m.cadenceRpm), m.powerWatts)
+    }
+
+    @Test fun `physics anchor is 150 W at 40 and 80 rpm`() { assertEquals(150, MockPhysics.watts(40, 80)) }
 }

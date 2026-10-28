@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.exp
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MockHeartRateDataSourceTest {
@@ -31,5 +32,21 @@ class MockHeartRateDataSourceTest {
         src.stop()
         assertEquals(ConnectionState.Unavailable, src.connectionState.value)
         assertNull(src.bpm.value)
+    }
+
+    @Test fun `physiology lags toward 60 plus 0_45 watts`() = runTest {
+        val watts = 200
+        val src = MockHeartRateDataSource(backgroundScope, powerWatts = { watts })
+        src.start(); runCurrent()
+        val first = src.bpm.value!!
+        advanceTimeBy(40_000); runCurrent()
+        val at40 = src.bpm.value!!
+        assertTrue(at40 > first); assertTrue(at40 < MockPhysiology.targetBpm(200))
+        advanceTimeBy(200_000); runCurrent()
+        assertEquals(MockPhysiology.targetBpm(200).toDouble(), src.bpm.value!!.toDouble(), 1.0)
+    }
+
+    @Test fun `physiology step is a first order lag`() {
+        assertEquals(100.0 + 50.0 * (1 - exp(-1.0)), MockPhysiology.step(100.0, 150, 40.0), 1e-6)
     }
 }

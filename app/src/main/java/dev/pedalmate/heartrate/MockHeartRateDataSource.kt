@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.PI
+import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -18,10 +19,19 @@ object MockHeartRateProfile {
     fun bpmAt(tSec: Int): Int = 110 + (20.0 * sin(2.0 * PI * tSec / 120.0)).roundToInt()
 }
 
-/** Emulator stand-in for a strap: replays [MockHeartRateProfile] every [tickMs]. */
+/** Emulator physiology: heart rate lags power as a first-order system. */
+object MockPhysiology {
+    fun targetBpm(watts: Int): Int = 60 + (0.45 * watts).roundToInt()
+
+    fun step(bpm: Double, target: Int, dtSec: Double, tauSec: Double = 40.0): Double =
+        bpm + (target - bpm) * (1 - exp(-dtSec / tauSec))
+}
+
+/** Emulator stand-in for a strap: replays [MockHeartRateProfile] every [tickMs], or follows [powerWatts] via [MockPhysiology] when given. */
 class MockHeartRateDataSource(
     private val scope: CoroutineScope,
     private val tickMs: Long = 1_000L,
+    private val powerWatts: (() -> Int)? = null,
 ) : ManagedHeartRateDataSource {
     private val _bpm = MutableStateFlow<Int?>(null)
     override val bpm: StateFlow<Int?> = _bpm.asStateFlow()
@@ -34,8 +44,15 @@ class MockHeartRateDataSource(
         if (job?.isActive == true) return
         job = scope.launch {
             var tick = 0L
+            var bpm = MockPhysiology.targetBpm(0).toDouble()   // starts at rest and lags up to the power-driven target
             while (isActive) {
-                _bpm.value = MockHeartRateProfile.bpmAt((tick * tickMs / 1_000L).toInt())
+                val power = powerWatts
+                if (power == null) {
+                    _bpm.value = MockHeartRateProfile.bpmAt((tick * tickMs / 1_000L).toInt())
+                } else {
+                    if (tick > 0) bpm = MockPhysiology.step(bpm, MockPhysiology.targetBpm(power()), tickMs / 1000.0)
+                    _bpm.value = bpm.roundToInt()
+                }
                 _state.value = ConnectionState.Connected
                 tick++
                 delay(tickMs)

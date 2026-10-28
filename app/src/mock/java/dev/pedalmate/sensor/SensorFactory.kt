@@ -15,8 +15,8 @@ object SensorFactory {
     fun createBikeSource(context: Context, scope: CoroutineScope): BoundBikeDataSource =
         MockBikeDataSource(ScriptedProfile(seed = 1L, ftp = 200), scope)
 
-    fun createHeartRateSource(context: Context, scope: CoroutineScope, store: SavedHrDeviceStore): ManagedHeartRateDataSource =
-        MockHeartRateDataSource(scope)
+    fun createHeartRateSource(context: Context, scope: CoroutineScope, store: SavedHrDeviceStore, bike: BoundBikeDataSource): ManagedHeartRateDataSource =
+        MockHeartRateDataSource(scope, powerWatts = { bike.metrics.value.powerWatts })
 
     fun createBleScanner(context: Context): BleScanner = MockBleScanner()
 }

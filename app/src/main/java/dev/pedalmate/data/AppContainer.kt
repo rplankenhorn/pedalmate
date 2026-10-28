@@ -28,9 +28,10 @@ class AppContainer(context: Context) {
     val database: AppDatabase by lazy { AppDatabase.create(appContext) }
     val workouts = WorkoutRepository(ContextAssetReader(appContext.assets))
     val hrStore: SavedHrDeviceStore = SettingsHrDeviceStore(settings, scope)
+    private val bike = SensorFactory.createBikeSource(appContext, scope)
     val hub = SensorHub(
-        bike = SensorFactory.createBikeSource(appContext, scope),
-        hr = SensorFactory.createHeartRateSource(appContext, scope, hrStore),
+        bike = bike,
+        hr = SensorFactory.createHeartRateSource(appContext, scope, hrStore, bike),
     )
     val hrPairing = HrPairing(hub.hr, hrStore)
     val cuePlayer = CuePlayer(scope)
