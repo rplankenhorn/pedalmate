@@ -10,6 +10,7 @@ import dev.pedalmate.data.SettingsStore
 import dev.pedalmate.overlay.formatRange
 import dev.pedalmate.ride.RideSnapshot
 import dev.pedalmate.ride.RideStatus
+import dev.pedalmate.sensor.ConnectionState
 import dev.pedalmate.workout.WorkoutRepository
 import dev.pedalmate.workout.ZoneTable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,19 +28,25 @@ const val FREE_RIDE_ID = "@free"
 private const val LICHESS_MISSING =
     "Lichess not found: run adb shell pm list packages | grep lichess and enter the package under Advanced."
 
+/** Start warning for an HR ride while the strap is not connected. */
+const val HR_NOT_CONNECTED = "No heart rate: resistance will hold until the strap connects"
+
 private const val OVERLAY_MISSING = "Overlay permission missing: the ride will run without the panel"
 
 /** One row of the zone preview, e.g. zone 5 and `263-299 W`. */
 data class ZoneRow(val zone: Int, val rangeText: String)
 
 /** One selectable entry in the workout picker. */
-data class WorkoutChoice(val id: String, val title: String, val subtitle: String)
+data class WorkoutChoice(val id: String, val title: String, val subtitle: String, val hrRide: Boolean = false)
 
 /** Everything the setup screen renders. */
 data class SetupUiState(
     val loaded: Boolean,
     val ftpText: String,
     val ftpError: String?,
+    val hrMinText: String,
+    val hrMaxText: String,
+    val hrTargetError: String?,
     val zoneRows: List<ZoneRow>,
     val workouts: List<WorkoutChoice>,
     val loadErrors: List<String>,
@@ -80,6 +87,8 @@ class SetupViewModel(
 ) : ViewModel() {
     private data class Local(
         val ftpEdit: String? = null,
+        val hrMinEdit: String? = null,
+        val hrMaxEdit: String? = null,
         val selected: String? = null,
         val pkgEdit: String? = null,
         val message: String? = null,
@@ -91,7 +100,7 @@ class SetupViewModel(
     private val loadResult = workouts.load()
     private val choices: List<WorkoutChoice> = loadResult.workouts.map {
         val minutes = it.totalSeconds / 60
-        WorkoutChoice(it.id, it.name, if (it.description.isNullOrBlank()) "$minutes min" else "$minutes min - ${it.description}")
+        WorkoutChoice(it.id, it.name, if (it.description.isNullOrBlank()) "$minutes min" else "$minutes min - ${it.description}", it.usesResistanceControl)
     } + WorkoutChoice(FREE_RIDE_ID, "Free ride", "No target, just ride")
     private val loadErrors = loadResult.errors.map { "${it.key}: ${it.value}" }
 
@@ -105,6 +114,11 @@ class SetupViewModel(
         val rows = ZoneTable.forFtp((parse as? FtpParse.Valid)?.ftp)?.ranges.orEmpty().map {
             ZoneRow(it.zone.number, formatRange(it).removePrefix("Z${it.zone.number} "))
         }
+        val hrMinText = l.hrMinEdit ?: s?.hrTargetMin?.toString().orEmpty()
+        val hrMaxText = l.hrMaxEdit ?: s?.hrTargetMax?.toString().orEmpty()
+        val hrError = (HrTargetInput.parse(hrMinText, hrMaxText) as? HrTargetParse.Invalid)?.reason
+        val selectedId = resolveSelected(s, l)
+        val hrRide = choices.firstOrNull { it.id == selectedId }?.hrRide == true
         val active = snap.status == RideStatus.RUNNING || snap.status == RideStatus.PAUSED
         val blocked = when {
             s == null -> "Loading settings"
@@ -115,13 +129,15 @@ class SetupViewModel(
         val pkgText = l.pkgEdit ?: s?.lichessPackage ?: SettingsStore.DEFAULT_LICHESS_PACKAGE
         val hrLabel = s?.let { st -> st.hrAddress?.let { addr -> st.hrName?.let { "$it ($addr)" } ?: addr } }
         return SetupUiState(
-            loaded = s != null, ftpText = ftpText, ftpError = ftpError, zoneRows = rows,
-            workouts = choices, loadErrors = loadErrors, selectedId = resolveSelected(s, l),
+            loaded = s != null, ftpText = ftpText, ftpError = ftpError,
+            hrMinText = hrMinText, hrMaxText = hrMaxText, hrTargetError = hrError, zoneRows = rows,
+            workouts = choices, loadErrors = loadErrors, selectedId = selectedId,
             lichessPackage = pkgText,
             lichessPackageError = if (l.pkgEdit != null && l.pkgEdit.isBlank()) "Package name required" else null,
             rideStatus = snap.status, canStart = blocked == null, startBlockedReason = blocked,
             startWarning = when {
-                parse is FtpParse.Empty -> "No FTP set: zones and targets will show dashes."
+                hrRide && snap.hrState != ConnectionState.Connected -> HR_NOT_CONNECTED
+                parse is FtpParse.Empty && !hrRide -> "No FTP set: zones and targets will show dashes."
                 !l.overlayGranted -> OVERLAY_MISSING
                 else -> null
             },
@@ -145,6 +161,20 @@ class SetupViewModel(
             FtpParse.Empty -> viewModelScope.launch { settings.setFtp(null) }
             is FtpParse.Invalid -> Unit // never saved: the previous value stays stored
         }
+    }
+
+    fun onHrMinChanged(text: String) = onHrChanged(min = text, max = null)
+
+    fun onHrMaxChanged(text: String) = onHrChanged(min = null, max = text)
+
+    private fun onHrChanged(min: String?, max: String?) {
+        val cur = state.value
+        val minText = min ?: cur.hrMinText
+        val maxText = max ?: cur.hrMaxText
+        local.update { it.copy(hrMinEdit = minText, hrMaxEdit = maxText) }
+        // Only a valid pair is stored (setHrTarget requires it); otherwise the previous value stays.
+        val p = HrTargetInput.parse(minText, maxText)
+        if (p is HrTargetParse.Valid) viewModelScope.launch { settings.setHrTarget(p.min, p.max) }
     }
 
     fun select(id: String) {

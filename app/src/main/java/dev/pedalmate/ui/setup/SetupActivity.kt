@@ -59,6 +59,8 @@ class SetupActivity : ComponentActivity() {
         val c = appContainer
         val actions = SetupActions(
             onFtpChange = vm::onFtpTextChanged,
+            onHrMinChange = vm::onHrMinChanged,
+            onHrMaxChange = vm::onHrMaxChanged,
             onSelect = vm::select,
             onStart = {
                 lifecycleScope.launch {

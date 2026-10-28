@@ -301,6 +301,52 @@ class SetupViewModelTest {
         assertEquals("AA:BB", v.state.value.hrDeviceLabel)
     }
 
+    private val hr40 = """{"id":"hr-40","name":"HR 40","steps":[{"label":"Hold","seconds":600,"hrTarget":true}]}"""
+
+    @Test
+    fun `hr target defaults to 130 and 140`() = runTest {
+        val s = vm().state.value
+        assertEquals("130", s.hrMinText)
+        assertEquals("140", s.hrMaxText)
+        assertNull(s.hrTargetError)
+    }
+
+    @Test
+    fun `a valid hr edit is saved and an invalid one is not`() = runTest {
+        val v = vm()
+        v.onHrMaxChanged("134")
+        assertEquals(HrTargetInput.ORDER_ERROR, v.state.value.hrTargetError)
+        assertEquals("134", v.state.value.hrMaxText)
+        assertEquals(140, settings.settings.first().hrTargetMax)
+        v.onHrMaxChanged("145")
+        assertNull(v.state.value.hrTargetError)
+        assertEquals(130, settings.settings.first().hrTargetMin)
+        assertEquals(145, settings.settings.first().hrTargetMax)
+        v.onHrMinChanged("abc")
+        assertEquals(HrTargetInput.FORMAT_ERROR, v.state.value.hrTargetError)
+        assertEquals(130, settings.settings.first().hrTargetMin)
+    }
+
+    @Test
+    fun `an hr ride warns when no strap is connected`() = runTest {
+        val v = vm(files + ("workouts/hr-40.json" to hr40))
+        v.select("hr-40")
+        assertEquals(HR_NOT_CONNECTED, v.state.value.startWarning)
+        assertTrue(v.state.value.canStart)
+        snapshot.value = snapshot.value.copy(hrState = dev.pedalmate.sensor.ConnectionState.Connected)
+        assertNull(v.state.value.startWarning)
+        snapshot.value = snapshot.value.copy(hrState = dev.pedalmate.sensor.ConnectionState.Disconnected)
+        v.select("t1")
+        assertEquals("No FTP set: zones and targets will show dashes.", v.state.value.startWarning)
+    }
+
+    @Test
+    fun `hr workouts are flagged in the picker`() = runTest {
+        val v = vm(files + ("workouts/hr-40.json" to hr40))
+        assertTrue(v.state.value.workouts.first { it.id == "hr-40" }.hrRide)
+        assertFalse(v.state.value.workouts.first { it.id == "t1" }.hrRide)
+    }
+
     @Test
     fun `no FTP never blocks a free ride`() = runTest {
         val v = vm()

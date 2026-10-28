@@ -17,6 +17,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -48,6 +49,8 @@ data class HrCardState(val deviceLabel: String?, val connection: ConnectionState
 /** Callbacks from the setup screen. */
 data class SetupActions(
     val onFtpChange: (String) -> Unit,
+    val onHrMinChange: (String) -> Unit,
+    val onHrMaxChange: (String) -> Unit,
     val onSelect: (String) -> Unit,
     val onStart: () -> Unit,
     val onStop: () -> Unit,
@@ -78,6 +81,7 @@ fun SetupScreen(state: SetupUiState, hr: HrCardState, pairing: PairingState, per
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 FtpCard(state, actions)
+                HrTargetCard(state, actions)
                 WorkoutPicker(state, actions, Modifier.weight(1f))
             }
             RightColumn(state, hr, pairing, permissions, actions, Modifier.weight(1f).fillMaxHeight())
@@ -88,6 +92,38 @@ fun SetupScreen(state: SetupUiState, hr: HrCardState, pairing: PairingState, per
                 TextButton(onClick = actions.onDismissMessage) { Text("DISMISS") }
             }
         }
+    }
+}
+
+@Composable
+private fun HrTargetCard(state: SetupUiState, actions: SetupActions) {
+    Column {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = state.hrMinText,
+                onValueChange = actions.onHrMinChange,
+                label = { Text("HR min (bpm)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = state.hrTargetError != null,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = state.hrMaxText,
+                onValueChange = actions.onHrMaxChange,
+                label = { Text("HR max (bpm)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = state.hrTargetError != null,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            state.hrTargetError ?: "Resistance follows this band in HR rides",
+            color = if (state.hrTargetError != null) MaterialTheme.colorScheme.error else Color.White.copy(alpha = 0.7f),
+            fontSize = 12.sp,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp),
+        )
     }
 }
 
