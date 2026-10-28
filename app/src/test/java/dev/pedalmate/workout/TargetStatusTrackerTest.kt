@@ -49,6 +49,21 @@ class TargetStatusTrackerTest {
         assertEquals(TargetStatus.IN, t.update(200, 160, z3))
     }
 
+    @Test fun `a null reading resets so the next one is judged immediately`() {
+        val t = TargetStatusTracker()
+        assertEquals(TargetStatus.IN, t.update(0, 160, z3))
+        assertNull(t.update(100, null, z3))
+        assertEquals(TargetStatus.BELOW, t.update(200, 140, z3))   // no debounce after the reset
+    }
+
+    @Test fun `a band change is debounced like a watt change`() {
+        val t = TargetStatusTracker()
+        assertEquals(TargetStatus.IN, t.updateBand(0, 135, 130..140))
+        assertEquals(TargetStatus.IN, t.updateBand(1_000, 120, 130..140))
+        assertEquals(TargetStatus.IN, t.updateBand(2_999, 120, 130..140))
+        assertEquals(TargetStatus.BELOW, t.updateBand(3_000, 120, 130..140))
+    }
+
     @Test fun `null or empty range returns null`() {
         assertNull(TargetStatusTracker().update(0, 160, null))
         assertNull(TargetStatusTracker().update(0, 160, ftp1z2))
@@ -83,6 +98,9 @@ class TargetStatusTrackerTest {
         val t = TargetStatusTracker()
         assertEquals(TargetStatus.IN, t.updateBand(0, 135, 130..140))
         assertNull(t.updateBand(100, null, 130..140))
-        assertNull(t.updateBand(200, 135, null))
+        // Reset proved: a BELOW value at the next tick is judged at once, not held at IN by the debounce.
+        assertEquals(TargetStatus.BELOW, t.updateBand(200, 120, 130..140))
+        assertNull(t.updateBand(300, 135, null))
+        assertEquals(TargetStatus.ABOVE, t.updateBand(400, 150, 130..140))
     }
 }

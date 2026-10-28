@@ -4,7 +4,7 @@ enum class TargetStatus { BELOW, IN, ABOVE }
 
 /** Below/in/above the target range with +-[toleranceWatts] slack; a change is shown only after [debounceMs] of agreement. */
 class TargetStatusTracker(private val debounceMs: Long = 2_000L, private val toleranceWatts: Int = 3) {
-    private var key: Triple<Int?, Int?, Int>? = null
+    private var key: Triple<Int, Int?, Int>? = null
     private var shown: TargetStatus? = null
     private var pending: TargetStatus? = null
     private var pendingSince = 0L
@@ -22,7 +22,7 @@ class TargetStatusTracker(private val debounceMs: Long = 2_000L, private val tol
     }
 
     private fun judge(nowMs: Long, value: Int, low: Int, high: Int?, tolerance: Int): TargetStatus {
-        val k = Triple<Int?, Int?, Int>(low, high, tolerance)
+        val k = Triple<Int, Int?, Int>(low, high, tolerance)
         if (k != key) { key = k; shown = null; pending = null }   // new target: judge immediately
         val raw = when {
             value < low - tolerance -> TargetStatus.BELOW

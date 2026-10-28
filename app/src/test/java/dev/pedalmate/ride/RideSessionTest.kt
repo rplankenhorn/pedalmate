@@ -25,6 +25,9 @@ private const val WORKOUT =
 private const val HR_WORKOUT =
     """{"id":"h","name":"HR","steps":[{"label":"Warm","seconds":10,"resistance":30},{"label":"Hold","seconds":600,"hrTarget":true},{"label":"Cool","seconds":10,"resistance":25}]}"""
 
+private const val MIXED_WORKOUT =
+    """{"id":"m","name":"Mixed","steps":[{"label":"A","seconds":10,"zone":2},{"label":"B","seconds":10,"hrTarget":true},{"label":"C","seconds":10,"zone":3}]}"""
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class RideSessionTest {
     private val bike = FakeBike()
@@ -32,7 +35,7 @@ class RideSessionTest {
     private val log = RecordingLog()
     private val cues = RecordingCues()
     private var ftp: Int? = 200      // FTP 200: Z1 0-109, Z2 110-149, Z3 150-179, Z4 180-209
-    private val repo = WorkoutRepository(MemAssetReader(mapOf("workouts/t.json" to WORKOUT, "workouts/h.json" to HR_WORKOUT)))
+    private val repo = WorkoutRepository(MemAssetReader(mapOf("workouts/t.json" to WORKOUT, "workouts/h.json" to HR_WORKOUT, "workouts/m.json" to MIXED_WORKOUT)))
 
     private fun TestScope.newSession(ready: suspend () -> Unit = {}, band: () -> IntRange = { 130..140 }) =
         RideSession(SensorHub(bike, hr), repo, log, cues, { ftp }, backgroundScope, ready, band)
@@ -455,5 +458,33 @@ class RideSessionTest {
         bike.set(power = 100, cadence = 80, resistance = 30)
         s.tick(0); s.skip(); s.tick(250); s.skip(); s.tick(500); s.skip(); s.tick(750)
         assertEquals(listOf(Cue.START, Cue.STEP_SAME, Cue.STEP_SAME, Cue.FINISH), cues.played)
+    }
+
+    @Test fun `a mixed zone hr zone workout hands the target over and back`() = runTest(UnconfinedTestDispatcher()) {
+        val s = newSession(); s.startWorkout("m")
+        bike.set(power = 130, cadence = 80, resistance = 30)
+        hr.bpmFlow.value = 135; hr.stateFlow.value = ConnectionState.Connected
+        // Zone step A: watts target, no HR band, but the ride already has a resistance mode.
+        s.run(0, 5_000)
+        var snap = s.snapshot.value
+        assertEquals(PowerZone.Z2, snap.targetZone)
+        assertNotNull(snap.targetRange); assertNull(snap.hrTarget)
+        assertNotNull(snap.resistanceMode)
+        assertEquals(TargetStatus.IN, snap.targetStatus)
+        // HR step B: band replaces the watt target.
+        s.run(5_250, 15_000)
+        snap = s.snapshot.value
+        assertEquals(130..140, snap.hrTarget)
+        assertNull(snap.targetZone); assertNull(snap.targetRange)
+        assertNotNull(snap.resistanceMode)
+        assertEquals(TargetStatus.IN, snap.targetStatus)
+        // Zone step C: watt target is back, the band is gone.
+        bike.set(power = 160, cadence = 80, resistance = 30)
+        s.run(15_250, 20_000)
+        snap = s.snapshot.value
+        assertEquals(PowerZone.Z3, snap.targetZone)
+        assertNotNull(snap.targetRange); assertNull(snap.hrTarget)
+        assertNotNull(snap.resistanceMode)
+        assertEquals(TargetStatus.IN, snap.targetStatus)
     }
 }
